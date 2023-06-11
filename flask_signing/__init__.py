@@ -184,15 +184,54 @@ from flask_signing.models import Signing, db
 
 
 class Signatures:
+    """
+    The Signatures class handles operations related to the creation, management, and validation 
+    of signing keys in the database.
+    """
+
     def __init__(self, database=db, key_len:int=24):
+        """
+        Initializes a new instance of the Signatures class.
+
+        Args:
+            database (SQLAlchemy, optional): An SQLAlchemy object for database interactions. 
+                Defaults to the db object imported from flask_signing.models.
+            key_len (int, optional): The length of the generated signing keys. Defaults to 24.
+        """
         self.db = database
         self.key_len = key_len
 
     # here we generate a signing key with a default length of 24
     def generate_key(self, length:int=24) -> str:
+        """
+        Generates a signing key with the specified length.
+
+        Args:
+            length (int, optional): The length of the generated signing key. Defaults to 24.
+
+        Returns:
+            str: The generated signing key.
+        """
+
         return secrets.token_urlsafe(length)
 
-    def write_key_to_database(self, scope:str=None, expiration:int=1, active:bool=True, email:str=None) -> str:
+    def write_key_to_database(self, scope:str, expiration:int=1, active:bool=True, email:str=None) -> str:
+        """
+        Writes a newly generated signing key to the database.
+
+        This function will continuously attempt to generate a key until a unique one is created. 
+
+        Args:
+            scope (str): The scope within which the signing key will be valid. Defaults to None.
+            expiration (int, optional): The number of hours after which the signing key will expire. 
+                If not provided or equals 0, the expiration will be set to zero. Defaults to 1.
+            active (bool, optional): The status of the signing key. Defaults to True.
+            email (str, optional): The email associated with the signing key. Defaults to None.
+
+        Returns:
+            str: The generated and written signing key.
+        """
+
         # loop until a unique key is generated
         while True:
             key = self.generate_key(length=self.key_len)
@@ -212,8 +251,20 @@ class Signatures:
 
         return key
 
-    # here we create a mechanism to disable keys when they are expired / finished being utilized
     def expire_key(self, key):
+
+        """
+        Expires a signing key in the database.
+
+        This function finds the key in the database and disables it by setting its 'active' status to False.
+        If the key does not exist, the function returns False and an HTTP status code 500.
+
+        Args:
+            key (str): The signing key to be expired.
+
+        Returns:
+            tuple: A tuple containing a boolean value indicating the success of the operation, and an HTTP status code.
+        """
 
         if not Signing.query.filter_by(signature=key).first():
             return False, 500
@@ -222,7 +273,7 @@ class Signatures:
         signing_df = pd.read_sql_table(Signing.__tablename__, con=self.db.engine.connect())
 
         # This will disable the key
-        signing_df.loc[ signing_df['signature'] == key, 'active' ] = 0
+        signing_df.loc[ signing_df['signature'] == key, 'active' ] = False
 
         # this will write the modified dataset to the database
         signing_df.to_sql(Signing.__tablename__, con=self.db.engine.connect(), if_exists='replace', index=False)
