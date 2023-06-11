@@ -1,2 +1,2 @@
 ## Flask-Signing
-a signing key library for flask
+a signing key extension for flask
