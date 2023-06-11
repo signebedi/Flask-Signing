@@ -2,9 +2,9 @@
 signing.py: function set for managing signing keys and corresponding database operations
 
 Signing keys, or signatures (we use these terms interchangeably), are used 
-in various situations to authenticate a user when logging in - or even 
-registering an account - are not reasonable expectations, but where we would 
-still like to be able to strongly authenticate a user before a privileged 
+in various situations to authenticate a user when requiring users to login 
+- or even register an account - is not a reasonable expectation, but where we 
+would still like to be able to strongly authenticate a user before a privileged 
 behavior is permitted by the application. This script defines a set of 
 operations to generate and manage these signatures using the signing database 
 defined in app/models.py, which is a useful script to review for more 
@@ -169,10 +169,10 @@ return YOUR VIEW HERE
 """
 
 
-__name__ = "app.signing"
+__name__ = "flask_signing"
 __author__ = "Sig Janoska-Bedi"
 __credits__ = ["Sig Janoska-Bedi",]
-__version__ = "2.1.0"
+__version__ = "0.1.0"
 __license__ = "AGPL-3.0"
 __maintainer__ = "Sig Janoska-Bedi"
 __email__ = "signe@atreeus.com"
@@ -181,7 +181,7 @@ import os, datetime, secrets, threading, time, functools
 import pandas as pd
 from flask import current_app, flash, redirect, url_for, abort
 from app import config, log
-from app.models import Signing, db
+from flask_signing.models import Signing, db
 
 # here we generate a signing key with a default length of 24
 def generate_key(length:int=24, urandom_method=False):
