@@ -1,0 +1,4 @@
+cryptography>=39.0.1
+Flask==2.3.2
+Flask-SQLAlchemy==3.0.2
+pandas==1.5.2
