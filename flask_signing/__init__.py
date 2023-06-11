@@ -288,24 +288,25 @@ class Signatures:
             bool: True if the signing key is valid and False otherwise.
         """
 
-        if not Signing.query.filter_by(signature=signature).first():
+        signing_key = Signing.query.filter_by(signature=signature).first()
+
+        # if the key doesn't exist
+        if not signing_key:
             return False
 
-        # if the signing key's expiration time has passed, then set it to inactive 
-        if Signing.query.filter_by(signature=signature).first().expiration < datetime.datetime.now():
+        # if the signing key's expiration time has passed
+        if signing_key.expiration < datetime.datetime.utcnow():
             self.expire_key(signature)
-
-        # if the signing key is set to inactive, then we prevent the user from proceeding
-        # this might be redundant to the above condition - but is a good redundancy for now
-        if Signing.query.filter_by(signature=signature).first().active == 0:
             return False
 
-        # if the signing key is not scoped (that is, intended) for this purpose, then 
-        # return an invalid error
-        if not Signing.query.filter_by(signature=signature).first().scope == scope:
+        # if the signing key is set to inactive
+        if not signing_key.active:
             return False
 
-        # Returning True is desirable. It means that we can run `if verify_signatures():` 
-        # as a way to require the check passes...
+        # if the signing key's scope doesn't match the required scope
+        if signing_key.scope != scope:
+            return False
+
         return True
+
 
