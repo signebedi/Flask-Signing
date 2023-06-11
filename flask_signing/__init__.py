@@ -180,146 +180,81 @@ __email__ = "signe@atreeus.com"
 import os, datetime, secrets, threading, time, functools
 import pandas as pd
 from flask import current_app, flash, redirect, url_for, abort
-from app import config, log
 from flask_signing.models import Signing, db
 
-# here we generate a signing key with a default length of 24
-def generate_key(length:int=24, urandom_method=False):
-    if urandom_method:
-        key = ''
+
+class Signatures:
+    def __init__(self, database=db, key_len:int=24):
+        self.db = database
+        self.key_len = key_len
+
+    # here we generate a signing key with a default length of 24
+    def generate_key(self, length:int=24) -> str:
+        return secrets.token_urlsafe(length)
+
+    def write_key_to_database(self, scope:str=None, expiration:int=1, active:bool=True, email:str=None) -> str:
+        # loop until a unique key is generated
         while True:
-            temp = os.urandom(1)
-            if temp.isdigit() or temp.isalpha():
-                key = key + temp.decode("utf-8") 
-            if len(key) == length:
-                return key
-    return secrets.token_urlsafe(length)
+            key = self.generate_key(length=self.key_len)
+            if not Signing.query.filter_by(signature=key).first(): break
 
+        new_key = Signing(
+                        signature=key, 
+                        scope=scope.lower() if scope else "",
+                        email=email.lower() if email else "", 
+                        active=active,
+                        expiration=(datetime.datetime.utcnow() + datetime.timedelta(hours=expiration)) if expiration else 0,
+                        timestamp=datetime.datetime.utcnow(),
+                        # timestamp=datetime.datetime.timestamp(datetime.datetime.now()),
+                        # expiration=datetime.datetime.timestamp((datetime.datetime.utcnow() + datetime.timedelta(hours=expiration))) if expiration else 0,
+        )
 
-# maybe the `active` parameter should be set to bool ... again, this is a bug or feature,
-# depending on context. 
-def write_key_to_database(scope:str=None, expiration:int=1, active:int=1, email:str=None):
+        self.db.session.add(new_key)
+        self.db.session.commit()
 
+        return key
 
-    # loop until a unique key is generated
-    while True:
-        key = generate_key(length=config['signing_key_length'])
-        if not Signing.query.filter_by(signature=key).first(): break
+    # here we create a mechanism to disable keys when they are expired / finished being utilized
+    def expire_key(self, key=None):
 
-    new_key = Signing(
-                    signature=key, 
-                    scope=scope.lower() if scope else "",
-                    email=email.lower() if email else "", 
-                    active=active,
-                    expiration_human_readable=(datetime.datetime.utcnow() + datetime.timedelta(hours=expiration)).strftime("%Y-%m-%d %H:%M:%S") if expiration else 0,
-                    timestamp_human_readable=datetime.datetime.utcnow().strftime("%Y-%m-%d %H:%M:%S"),
-                    timestamp=datetime.datetime.timestamp(datetime.datetime.now()),
-                    expiration=datetime.datetime.timestamp((datetime.datetime.utcnow() + datetime.timedelta(hours=expiration))) if expiration else 0,
-    )
+        if not Signing.query.filter_by(signature=key).first():
+            return False, 500
 
-    db.session.add(new_key)
-    db.session.commit()
-    log.info(f'LIBREFORMS - successfully generated key for {email}.')
-
-    return key
-
-# DEPRECATED in favor of key-by-key verification, see verify_signatures()
-def flush_key_db():
-    signing_df = pd.read_sql_table(Signing.__tablename__, con=db.engine.connect())
-
-    # This will disable all keys whose 'expiration' timestamp is less than the current time
-    signing_df.loc[ signing_df['expiration'] < datetime.datetime.timestamp(datetime.datetime.now()), 'active' ] = 0
-
-    # this will write the modified dataset to the database
-    signing_df.to_sql(Signing.__tablename__, con=db.engine.connect(), if_exists='replace', index=False)
-    return signing_df
-
-# DEPRECATED: I don't think this approach is particularly efficient anymore; instead, 
-# we'll approach expiration on a key-by-key basis and potentially prepare an abstract function.
-
-# class flushTimer:
-#     def __init__(self, signing_df):
-#             t = threading.Thread(target=self.sleep_until_next_expiration(signing_df))
-#             t.start()
-#             # executor.submit(self.sleep_until_next_expiration(signing_df))
-
-#     def sleep_until_next_expiration(self, signing_df):
-#         # while True:
-
-#             # we take a slice to restrict down to active keys
-#             active_keys = signing_df.loc[ signing_df.active == 1 ]
-
-#             # we create a datetime object from the next expiration timestamp
-#             next_expiration = datetime.datetime.fromtimestamp (
-#                 active_keys.expiration.min()
-#             # if there are no signing keys, then we check every minute
-#             ) if len(active_keys.index > 0) else datetime.datetime.now()+datetime.timedelta(minutes=1)
-
-#             # create an object measuring the amount of time until the next expiration
-#             diff = next_expiration - datetime.datetime.now()
-
-#             # sleep for the duration of the time difference measured above
-#             time.sleep(diff.total_seconds())
-
-#             flush_key_db()
-
-# here we create a mechanism to disable keys when they are used
-def expire_key(key=None):
-
-    # I wonder if there is a more efficient way to accomplish this ... eg. to simply modify 
-    # the entry at the query stage immediately below...
-    if Signing.query.filter_by(signature=key).first():
-
-        signing_df = pd.read_sql_table(Signing.__tablename__, con=db.engine.connect())
+        # if we can switch this to a pure SQL Alchemy solution, then we can probably remove our pandas requirement... 
+        signing_df = pd.read_sql_table(Signing.__tablename__, con=self.db.engine.connect())
 
         # This will disable the key
         signing_df.loc[ signing_df['signature'] == key, 'active' ] = 0
 
         # this will write the modified dataset to the database
-        signing_df.to_sql(Signing.__tablename__, con=db.engine.connect(), if_exists='replace', index=False)
-        return signing_df
-    
-    else:
-        log.error(f"LIBREFORMS - attempted to expire key {key} but failed to locate it in the signing database.")
+        signing_df.to_sql(Signing.__tablename__, con=self.db.engine.connect(), if_exists='replace', index=False)
+        return True, 200
+        
+    # here we define an abstract set of operations that we want 
+    # to run everytime the end user attempts to invoke a signature
+    def verify_signature(       self,
+                                signature, # the key to validate
+                                scope, # what scope the signature should be validated against
+                        ):
 
-# here we define an abstract set of operations that we want 
-# to run everytime the end user attempts to invoke a   
-def verify_signatures(      signature, # the key to validate
-                            scope, # what scope the signature should be validated against
-                            redirect_to='home', # failed validations redirect here unless abort_on_errors=True
-                            flash_msg="Invalid request key. ", # failed validations give msg unless abort_on_errors=True
-                            abort_on_error=False, # if True, failed validations will return a 404
-                    ):
+        if not Signing.query.filter_by(signature=signature).first():
+            return False
 
-    if not Signing.query.filter_by(signature=signature).first():
-        if abort_on_error:
-            return abort(404)
-        flash(flash_msg, "warning")
-        return redirect(url_for(redirect_to))
+        # if the signing key's expiration time has passed, then set it to inactive 
+        if Signing.query.filter_by(signature=signature).first().expiration < datetime.datetime.timestamp(datetime.datetime.now()):
+            self.expire_key(signature)
 
-    # if the signing key's expiration time has passed, then set it to inactive 
-    if Signing.query.filter_by(signature=signature).first().expiration < datetime.datetime.timestamp(datetime.datetime.now()):
-        expire_key(signature)
+        # if the signing key is set to inactive, then we prevent the user from proceeding
+        # this might be redundant to the above condition - but is a good redundancy for now
+        if Signing.query.filter_by(signature=signature).first().active == 0:
+            return False
 
-    # if the signing key is set to inactive, then we prevent the user from proceeding
-    # this might be redundant to the above condition - but is a good redundancy for now
-    if Signing.query.filter_by(signature=signature).first().active == 0:
-        if abort_on_error:
-            return abort(404)
-        flash(flash_msg, "warning")
-        return redirect(url_for(redirect_to))
+        # if the signing key is not scoped (that is, intended) for this purpose, then 
+        # return an invalid error
+        if not Signing.query.filter_by(signature=signature).first().scope == scope:
+            return False
 
-    # if the signing key is not scoped (that is, intended) for this purpose, then 
-    # return an invalid error
-    if not Signing.query.filter_by(signature=signature).first().scope == scope:
-        if abort_on_error:
-            return abort(404)
-        flash(flash_msg, "warning")
-        return redirect(url_for(redirect_to))
-
-    # Returning None is desirable. It means that we can run `if not verify_signatures():` 
-    # as a way to require the check passes... This has allowed us to fix an improper access
-    # bug that did not prevent users with keys in the signing db -- irrespective of whether
-    # they were still active -- to access other resources.
-    return None
+        # Returning True is desirable. It means that we can run `if verify_signatures():` 
+        # as a way to require the check passes...
+        return True
 
