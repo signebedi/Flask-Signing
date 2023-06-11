@@ -1,6 +1,11 @@
 ## Flask-Signing
 a signing key extension for flask
 
+
+### About
+
+The Flask-Signing library is a useful tool for Flask applications that requires secure and robust management of signing keys. This package aids in managing API keys, ensuring only clients with valid permissions can access your resources. Do you need to generate single-use tokens for one-time actions like email verification or password reset? Flask-Signing can handle that. In theory, it can also help manage session IDs. For applications that implement JWT or OAuth2, Flask-Signing can generate and manage the signing keys for your tokens. You can also use it to verify webhook payloads or to implement a licensing system for your software. 
+
 ### Installation
 
 First, install the flask_signing package. You can do this with pip:
