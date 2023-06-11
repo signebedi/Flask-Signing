@@ -178,7 +178,6 @@ __maintainer__ = "Sig Janoska-Bedi"
 __email__ = "signe@atreeus.com"
 
 import os, datetime, secrets, threading, time, functools
-import pandas as pd
 from flask import current_app, flash, redirect, url_for, abort
 from flask_signing.models import Signing, db
 
@@ -265,20 +264,15 @@ class Signatures:
         Returns:
             tuple: A tuple containing a boolean value indicating the success of the operation, and an HTTP status code.
         """
-
-        if not Signing.query.filter_by(signature=key).first():
-            return False, 500
-
-        ### ! if we can switch this to a pure SQL Alchemy solution, then we can probably remove our pandas requirement... 
-        signing_df = pd.read_sql_table(Signing.__tablename__, con=self.db.engine.connect())
+        signing_key = Signing.query.filter_by(signature=key).first()
+        if not signing_key:
+            return False
 
         # This will disable the key
-        signing_df.loc[ signing_df['signature'] == key, 'active' ] = False
+        signing_key.active = False
+        self.db.session.commit()
+        return True
 
-        # this will write the modified dataset to the database
-        signing_df.to_sql(Signing.__tablename__, con=self.db.engine.connect(), if_exists='replace', index=False)
-        return True, 200
-        
     # here we define an abstract set of operations that we want 
     # to run everytime the end user attempts to invoke a signature
     def verify_signature(       self,
