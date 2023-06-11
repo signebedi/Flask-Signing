@@ -200,7 +200,6 @@ class Signatures:
         self.db = database
         self.key_len = key_len
 
-    # here we generate a signing key with a default length of 24
     def generate_key(self, length:int=24) -> str:
         """
         Generates a signing key with the specified length.
@@ -214,7 +213,7 @@ class Signatures:
 
         return secrets.token_urlsafe(length)
 
-    def write_key_to_database(self, scope:str, expiration:int=1, active:bool=True, email:str=None) -> str:
+    def write_key_to_database(self, scope:str=None, expiration:int=1, active:bool=True, email:str=None) -> str:
         """
         Writes a newly generated signing key to the database.
 
@@ -273,12 +272,21 @@ class Signatures:
         self.db.session.commit()
         return True
 
-    # here we define an abstract set of operations that we want 
-    # to run everytime the end user attempts to invoke a signature
-    def verify_signature(       self,
-                                signature, # the key to validate
-                                scope, # what scope the signature should be validated against
-                        ):
+    def verify_signature(self, signature, scope):
+        """
+        Verifies the validity of a given signing key against a specific scope.
+
+        This function checks if the signing key exists, if it is active, if it has not expired,
+        and if its scope matches the provided scope. If all these conditions are met, the function
+        returns True, otherwise, it returns False.
+
+        Args:
+            signature (str): The signing key to be verified.
+            scope (str): The scope against which the signing key will be validated.
+
+        Returns:
+            bool: True if the signing key is valid and False otherwise.
+        """
 
         if not Signing.query.filter_by(signature=signature).first():
             return False
