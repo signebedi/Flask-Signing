@@ -205,8 +205,6 @@ class Signatures:
                         active=active,
                         expiration=(datetime.datetime.utcnow() + datetime.timedelta(hours=expiration)) if expiration else 0,
                         timestamp=datetime.datetime.utcnow(),
-                        # timestamp=datetime.datetime.timestamp(datetime.datetime.now()),
-                        # expiration=datetime.datetime.timestamp((datetime.datetime.utcnow() + datetime.timedelta(hours=expiration))) if expiration else 0,
         )
 
         self.db.session.add(new_key)
@@ -215,12 +213,12 @@ class Signatures:
         return key
 
     # here we create a mechanism to disable keys when they are expired / finished being utilized
-    def expire_key(self, key=None):
+    def expire_key(self, key):
 
         if not Signing.query.filter_by(signature=key).first():
             return False, 500
 
-        # if we can switch this to a pure SQL Alchemy solution, then we can probably remove our pandas requirement... 
+        ### ! if we can switch this to a pure SQL Alchemy solution, then we can probably remove our pandas requirement... 
         signing_df = pd.read_sql_table(Signing.__tablename__, con=self.db.engine.connect())
 
         # This will disable the key
@@ -241,7 +239,7 @@ class Signatures:
             return False
 
         # if the signing key's expiration time has passed, then set it to inactive 
-        if Signing.query.filter_by(signature=signature).first().expiration < datetime.datetime.timestamp(datetime.datetime.now()):
+        if Signing.query.filter_by(signature=signature).first().expiration < datetime.datetime.now():
             self.expire_key(signature)
 
         # if the signing key is set to inactive, then we prevent the user from proceeding

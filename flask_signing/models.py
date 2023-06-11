@@ -1,5 +1,5 @@
 """ 
-models.py: defining the models 
+models.py: defining the Signing key model 
 """
 
 __name__ = "flask_signing.models"
@@ -10,8 +10,6 @@ __license__ = "AGPL-3.0"
 __maintainer__ = "Sig Janoska-Bedi"
 __email__ = "signe@atreeus.com"
 
-from flask import current_app
-from flask_login import UserMixin
 from flask_sqlalchemy import SQLAlchemy
 from datetime import datetime
 
