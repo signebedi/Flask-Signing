@@ -16,6 +16,19 @@ from datetime import datetime
 db = SQLAlchemy()
 
 class Signing(db.Model):
+    """
+    The Signing class represents the Signing table in the database.
+
+    Each instance of this class represents a row of data in the database table.
+
+    Attributes:
+        signature (str): The primary key of the Signing table. This field is unique for each entry.
+        email (str): The email associated with a specific signing key.
+        scope (str): The scope within which the key is valid.
+        active (bool): The status of the signing key. If True, the key is active.
+        timestamp (datetime): The date and time when the signing key was created.
+        expiration (datetime): The date and time when the signing key is set to expire.
+    """
     __tablename__ = 'signing'
     signature = db.Column(db.String, primary_key=True) 
     email = db.Column(db.String(100))
@@ -23,5 +36,3 @@ class Signing(db.Model):
     active = db.Column(db.Boolean)
     timestamp = db.Column(db.DateTime, nullable=False, default=datetime.utcnow)
     expiration = db.Column(db.DateTime, nullable=False, default=datetime.utcnow)
-    # timestamp = db.Column(db.Float)
-    # expiration = db.Column(db.Float)
