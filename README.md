@@ -1,3 +1,6 @@
+[![Flask-Signing tests](https://github.com/signebedi/Flask-Signing/workflows/tests/badge.svg)](https://github.com/signebedi/Flask-Signing/actions)
+
+
 ## Flask-Signing
 a signing key extension for flask
 
