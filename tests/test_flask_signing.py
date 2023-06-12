@@ -74,5 +74,35 @@ class TestFlaskSigning(unittest.TestCase):
             # Test non-existent key
             self.assertFalse(self.signatures.verify_signature(signature='non-existent-key', scope='test'))
 
+    def test_query_keys(self):
+        """
+        Test if the query_keys method returns correct records.
+        """
+        with self.app.app_context():
+            key1 = self.signatures.write_key_to_database(scope='test1', email='test1@example.com')
+            key2 = self.signatures.write_key_to_database(scope='test2', email='test2@example.com', active=False)
+
+            # Test querying by active status
+            result = self.signatures.query_keys(active=True)
+            self.assertTrue(all(record['active'] for record in result))
+
+            # Test querying by scope
+            result = self.signatures.query_keys(scope='test1')
+            self.assertTrue(all(record['scope'] == 'test1' for record in result))
+
+            # Test querying by email
+            result = self.signatures.query_keys(email='test2@example.com')
+            self.assertTrue(all(record['email'] == 'test2@example.com' for record in result))
+
+            # Test querying by multiple fields
+            result = self.signatures.query_keys(active=True, scope='test1', email='test1@example.com')
+            self.assertEqual(len(result), 1)
+            self.assertEqual(result[0]['signature'], key1)
+
+            # Test querying with no results
+            result = self.signatures.query_keys(active=True, scope='non-existent-scope')
+            self.assertFalse(result)
+
+
 if __name__ == '__main__':
     unittest.main()
