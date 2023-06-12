@@ -2,7 +2,7 @@ from setuptools import setup, find_packages
 
 setup(
     name='flask_signing',
-    version='0.1.0',
+    version='0.2.0',
     url='https://github.com/signebedi/Flask-Signing',
     author='Sig Janoska-Bedi',
     author_email='signe@atreeus.com',
