@@ -8,7 +8,7 @@ __email__ = "signe@atreeus.com"
 
 import datetime, secrets
 from flask_sqlalchemy import SQLAlchemy
-
+from typing import Union, List, Dict, Any
 
 class Signatures:
     """
@@ -179,3 +179,39 @@ class Signatures:
             self._model = Signing
 
         return self._model
+
+
+    def query_keys(self, active:bool=None, scope:str=None, email:str=None) -> Union[List[Dict[str, Any]], bool]:
+        """
+        Query signing keys by active status, scope, and email.
+
+        This function returns a list of signing keys that match the provided parameters.
+        If no keys are found, it returns False.
+
+        Args:
+            active (bool, optional): The active status of the signing keys. Defaults to None.
+            scope (str, optional): The scope of the signing keys. Defaults to None.
+            email (str, optional): The email associated with the signing keys. Defaults to None.
+
+        Returns:
+            Union[List[Dict[str, Any]], bool]: A list of dictionaries where each dictionary contains the details of a signing key,
+            or False if no keys are found.
+        """
+
+        Signing = self.get_model()
+
+        query = Signing.query
+
+        if active is not None:
+            query = query.filter(Signing.active == active)
+        if scope:
+            query = query.filter(Signing.scope == scope)
+        if email:
+            query = query.filter(Signing.email == email)
+
+        result = query.all()
+
+        if not result:
+            return False
+
+        return [{'signature': key.signature, 'email': key.email, 'scope': key.scope, 'active': key.active, 'timestamp': key.timestamp, 'expiration': key.expiration} for key in result]
