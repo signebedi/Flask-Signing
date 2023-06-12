@@ -3,7 +3,6 @@ import unittest
 from flask import Flask
 from flask_sqlalchemy import SQLAlchemy
 from flask_signing import Signatures
-from flask_signing.models import Signing, db as db_orig
 
 class TestFlaskSigning(unittest.TestCase):
 
@@ -12,12 +11,12 @@ class TestFlaskSigning(unittest.TestCase):
         Set up testing environment.
         """
         self.app = Flask(__name__)
-        self.app.config['SQLALCHEMY_DATABASE_URI'] = 'sqlite:///:memory:'  # Use in-memory SQLite for testing
+        self.app.config['SQLALCHEMY_DATABASE_URI'] = 'sqlite:///:memory:'
         self.app.config['TESTING'] = True
-        self.db = SQLAlchemy(self.app)
-        self.signatures = Signatures(database=self.db)
 
         with self.app.app_context():
+            self.signatures = Signatures(app=self.app)
+            self.db = self.signatures.db
             self.db.create_all()
 
     def tearDown(self):
@@ -26,7 +25,8 @@ class TestFlaskSigning(unittest.TestCase):
         """
         with self.app.app_context():
             self.db.session.remove()
-            self.db.drop_all()
+            self.db.drop_all()  # drop all tables in the database
+
 
     def test_generate_key(self):
         """
@@ -41,15 +41,23 @@ class TestFlaskSigning(unittest.TestCase):
         self.assertTrue(self.signatures.byte_len < len(key) < 1.6*self.signatures.byte_len)
         self.assertIsInstance(key, str)
 
+    # def test_write_and_expire_key(self):
+    #     """
+    #     Test if a key can be written to the database and then successfully expired.
+    #     """
+    #     with self.app.app_context():
+    #         key = self.signatures.write_key_to_database(scope='test')
+    #     self.assertIsNotNone(Signing.query.filter_by(signature=key).first())
+    #     self.signatures.expire_key(key)
+    #     self.assertFalse(Signing.query.filter_by(signature=key).first().active)
+
     def test_write_and_expire_key(self):
-        """
-        Test if a key can be written to the database and then successfully expired.
-        """
         with self.app.app_context():
             key = self.signatures.write_key_to_database(scope='test')
-        self.assertIsNotNone(Signing.query.filter_by(signature=key).first())
-        self.signatures.expire_key(key)
-        self.assertFalse(Signing.query.filter_by(signature=key).first().active)
+            Signing = self.signatures.get_model()
+            self.assertIsNotNone(Signing.query.filter_by(signature=key).first())
+            self.signatures.expire_key(key)
+            self.assertFalse(Signing.query.filter_by(signature=key).first().active)
 
     def test_verify_signature(self):
         """
