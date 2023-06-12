@@ -15,7 +15,7 @@ class Signatures:
     The Signatures class handles operations related to the creation, management, and validation 
     of signing keys in the database.
     """
-
+    
     def __init__(self, app, byte_len:int=24):
         """
         Initializes a new instance of the Signatures class.
@@ -169,7 +169,7 @@ class Signatures:
                     expiration (datetime): The date and time when the signing key is set to expire.
                 """
                 __tablename__ = 'signing'
-                signature = self.db.Column(self.db.String, primary_key=True) 
+                signature = self.db.Column(self.db.String(1000), primary_key=True) 
                 email = self.db.Column(self.db.String(100))
                 scope = self.db.Column(self.db.String(100))
                 active = self.db.Column(self.db.Boolean)
