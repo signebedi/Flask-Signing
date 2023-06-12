@@ -181,21 +181,23 @@ class Signatures:
         return True
 
     def get_model(self):
+
+        &#34;&#34;&#34;
+        Generate an instance of the Signing class, which represents the Signing table in the database.
+
+        Each instance of this class represents a row of data in the database table.
+
+        Attributes:
+            signature (str): The primary key of the Signing table. This field is unique for each entry.
+            email (str): The email associated with a specific signing key.
+            scope (str): The scope within which the key is valid.
+            active (bool): The status of the signing key. If True, the key is active.
+            timestamp (datetime): The date and time when the signing key was created.
+            expiration (datetime): The date and time when the signing key is set to expire.
+        &#34;&#34;&#34;
+
         if not hasattr(self, &#39;_model&#39;):
             class Signing(self.db.Model):
-                &#34;&#34;&#34;
-                The Signing class represents the Signing table in the database.
-
-                Each instance of this class represents a row of data in the database table.
-
-                Attributes:
-                    signature (str): The primary key of the Signing table. This field is unique for each entry.
-                    email (str): The email associated with a specific signing key.
-                    scope (str): The scope within which the key is valid.
-                    active (bool): The status of the signing key. If True, the key is active.
-                    timestamp (datetime): The date and time when the signing key was created.
-                    expiration (datetime): The date and time when the signing key is set to expire.
-                &#34;&#34;&#34;
                 __tablename__ = &#39;signing&#39;
                 signature = self.db.Column(self.db.String(1000), primary_key=True) 
                 email = self.db.Column(self.db.String(100))
@@ -416,21 +418,23 @@ of signing keys in the database.</p>
         return True
 
     def get_model(self):
+
+        &#34;&#34;&#34;
+        Generate an instance of the Signing class, which represents the Signing table in the database.
+
+        Each instance of this class represents a row of data in the database table.
+
+        Attributes:
+            signature (str): The primary key of the Signing table. This field is unique for each entry.
+            email (str): The email associated with a specific signing key.
+            scope (str): The scope within which the key is valid.
+            active (bool): The status of the signing key. If True, the key is active.
+            timestamp (datetime): The date and time when the signing key was created.
+            expiration (datetime): The date and time when the signing key is set to expire.
+        &#34;&#34;&#34;
+
         if not hasattr(self, &#39;_model&#39;):
             class Signing(self.db.Model):
-                &#34;&#34;&#34;
-                The Signing class represents the Signing table in the database.
-
-                Each instance of this class represents a row of data in the database table.
-
-                Attributes:
-                    signature (str): The primary key of the Signing table. This field is unique for each entry.
-                    email (str): The email associated with a specific signing key.
-                    scope (str): The scope within which the key is valid.
-                    active (bool): The status of the signing key. If True, the key is active.
-                    timestamp (datetime): The date and time when the signing key was created.
-                    expiration (datetime): The date and time when the signing key is set to expire.
-                &#34;&#34;&#34;
                 __tablename__ = &#39;signing&#39;
                 signature = self.db.Column(self.db.String(1000), primary_key=True) 
                 email = self.db.Column(self.db.String(100))
@@ -572,27 +576,45 @@ see <a href="https://docs.python.org/3/library/secrets.html.">https://docs.pytho
 <span>def <span class="ident">get_model</span></span>(<span>self)</span>
 </code></dt>
 <dd>
-<div class="desc"></div>
+<div class="desc"><p>Generate an instance of the Signing class, which represents the Signing table in the database.</p>
+<p>Each instance of this class represents a row of data in the database table.</p>
+<h2 id="attributes">Attributes</h2>
+<dl>
+<dt><strong><code>signature</code></strong> :&ensp;<code>str</code></dt>
+<dd>The primary key of the Signing table. This field is unique for each entry.</dd>
+<dt><strong><code>email</code></strong> :&ensp;<code>str</code></dt>
+<dd>The email associated with a specific signing key.</dd>
+<dt><strong><code>scope</code></strong> :&ensp;<code>str</code></dt>
+<dd>The scope within which the key is valid.</dd>
+<dt><strong><code>active</code></strong> :&ensp;<code>bool</code></dt>
+<dd>The status of the signing key. If True, the key is active.</dd>
+<dt><strong><code>timestamp</code></strong> :&ensp;<code>datetime</code></dt>
+<dd>The date and time when the signing key was created.</dd>
+<dt><strong><code>expiration</code></strong> :&ensp;<code>datetime</code></dt>
+<dd>The date and time when the signing key is set to expire.</dd>
+</dl></div>
 <details class="source">
 <summary>
 <span>Expand source code</span>
 </summary>
 <pre><code class="python">def get_model(self):
+
+    &#34;&#34;&#34;
+    Generate an instance of the Signing class, which represents the Signing table in the database.
+
+    Each instance of this class represents a row of data in the database table.
+
+    Attributes:
+        signature (str): The primary key of the Signing table. This field is unique for each entry.
+        email (str): The email associated with a specific signing key.
+        scope (str): The scope within which the key is valid.
+        active (bool): The status of the signing key. If True, the key is active.
+        timestamp (datetime): The date and time when the signing key was created.
+        expiration (datetime): The date and time when the signing key is set to expire.
+    &#34;&#34;&#34;
+
     if not hasattr(self, &#39;_model&#39;):
         class Signing(self.db.Model):
-            &#34;&#34;&#34;
-            The Signing class represents the Signing table in the database.
-
-            Each instance of this class represents a row of data in the database table.
-
-            Attributes:
-                signature (str): The primary key of the Signing table. This field is unique for each entry.
-                email (str): The email associated with a specific signing key.
-                scope (str): The scope within which the key is valid.
-                active (bool): The status of the signing key. If True, the key is active.
-                timestamp (datetime): The date and time when the signing key was created.
-                expiration (datetime): The date and time when the signing key is set to expire.
-            &#34;&#34;&#34;
             __tablename__ = &#39;signing&#39;
             signature = self.db.Column(self.db.String(1000), primary_key=True) 
             email = self.db.Column(self.db.String(100))
