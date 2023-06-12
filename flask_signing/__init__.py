@@ -7,7 +7,7 @@ __maintainer__ = "Sig Janoska-Bedi"
 __email__ = "signe@atreeus.com"
 
 import datetime, secrets
-from flask_signing.models import Signing, db
+from flask_sqlalchemy import SQLAlchemy
 
 
 class Signatures:
@@ -16,16 +16,20 @@ class Signatures:
     of signing keys in the database.
     """
 
-    def __init__(self, database=db, byte_len:int=24):
+    def __init__(self, app, byte_len:int=24):
         """
         Initializes a new instance of the Signatures class.
 
         Args:
-            database (SQLAlchemy, optional): An SQLAlchemy object for database interactions. 
-                Defaults to the db object imported from flask_signing.models.
+            app (Flask): A flask object to contain the context for database interactions. 
             byte_len (int, optional): The length of the generated signing keys. Defaults to 24.
         """
-        self.db = database
+
+        self.db = SQLAlchemy(app)
+        self.Signing = self.get_model()
+        self.db.create_all()  # this will create all necessary tables
+
+        # self.db = database
         self.byte_len = byte_len
 
     def generate_key(self, length:int=None) -> str:
@@ -61,6 +65,7 @@ class Signatures:
         Returns:
             str: The generated and written signing key.
         """
+        Signing = self.get_model()
 
         # loop until a unique key is generated
         while True:
@@ -95,6 +100,9 @@ class Signatures:
         Returns:
             tuple: A tuple containing a boolean value indicating the success of the operation, and an HTTP status code.
         """
+
+        Signing = self.get_model()
+
         signing_key = Signing.query.filter_by(signature=key).first()
         if not signing_key:
             return False
@@ -120,6 +128,9 @@ class Signatures:
             bool: True if the signing key is valid and False otherwise.
         """
 
+        Signing = self.get_model()
+
+
         signing_key = Signing.query.filter_by(signature=signature).first()
 
         # if the key doesn't exist
@@ -141,4 +152,58 @@ class Signatures:
 
         return True
 
+    def get_model(self):
+        if not hasattr(self, '_model'):
+            class Signing(self.db.Model):
+                """
+                The Signing class represents the Signing table in the database.
+
+                Each instance of this class represents a row of data in the database table.
+
+                Attributes:
+                    signature (str): The primary key of the Signing table. This field is unique for each entry.
+                    email (str): The email associated with a specific signing key.
+                    scope (str): The scope within which the key is valid.
+                    active (bool): The status of the signing key. If True, the key is active.
+                    timestamp (datetime): The date and time when the signing key was created.
+                    expiration (datetime): The date and time when the signing key is set to expire.
+                """
+                __tablename__ = 'signing'
+                signature = self.db.Column(self.db.String, primary_key=True) 
+                email = self.db.Column(self.db.String(100))
+                scope = self.db.Column(self.db.String(100))
+                active = self.db.Column(self.db.Boolean)
+                timestamp = self.db.Column(self.db.DateTime, nullable=False, default=datetime.datetime.utcnow)
+                expiration = self.db.Column(self.db.DateTime, nullable=False, default=datetime.datetime.utcnow)
+
+            self._model = Signing
+
+        return self._model
+
+
+    # def get_model(self):
+    #     class Signing(self.db.Model):
+
+    #         """
+    #         The Signing class represents the Signing table in the database.
+
+    #         Each instance of this class represents a row of data in the database table.
+
+    #         Attributes:
+    #             signature (str): The primary key of the Signing table. This field is unique for each entry.
+    #             email (str): The email associated with a specific signing key.
+    #             scope (str): The scope within which the key is valid.
+    #             active (bool): The status of the signing key. If True, the key is active.
+    #             timestamp (datetime): The date and time when the signing key was created.
+    #             expiration (datetime): The date and time when the signing key is set to expire.
+    #         """
+    #         __tablename__ = 'signing'
+    #         signature = self.db.Column(self.db.String, primary_key=True) 
+    #         email = self.db.Column(self.db.String(100))
+    #         scope = self.db.Column(self.db.String(100))
+    #         active = self.db.Column(self.db.Boolean)
+    #         timestamp = self.db.Column(self.db.DateTime, nullable=False, default=datetime.datetime.utcnow)
+    #         expiration = self.db.Column(self.db.DateTime, nullable=False, default=datetime.datetime.utcnow)
+
+    #     return Signing
 
