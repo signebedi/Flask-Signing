@@ -16,31 +16,33 @@ class Signatures:
     of signing keys in the database.
     """
 
-    def __init__(self, database=db, key_len:int=24):
+    def __init__(self, database=db, byte_len:int=24):
         """
         Initializes a new instance of the Signatures class.
 
         Args:
             database (SQLAlchemy, optional): An SQLAlchemy object for database interactions. 
                 Defaults to the db object imported from flask_signing.models.
-            key_len (int, optional): The length of the generated signing keys. Defaults to 24.
+            byte_len (int, optional): The length of the generated signing keys. Defaults to 24.
         """
         self.db = database
-        self.key_len = key_len
+        self.byte_len = byte_len
 
     def generate_key(self, length:int=None) -> str:
         """
-        Generates a signing key with the specified length.
+        Generates a signing key with the specified byte length. 
+        Note: byte length generally translates to about 1.3 times as many chars,
+        see https://docs.python.org/3/library/secrets.html.
 
         Args:
-            length (int, optional): The length of the generated signing key. Defaults to None.
+            length (int, optional): The length of the generated signing key. Defaults to None, in which case the byte_len is used.
 
         Returns:
             str: The generated signing key.
         """
 
         if not length: 
-            length = self.key_len
+            length = self.byte_len
         return secrets.token_urlsafe(length)
 
     def write_key_to_database(self, scope:str=None, expiration:int=1, active:bool=True, email:str=None) -> str:
@@ -62,7 +64,7 @@ class Signatures:
 
         # loop until a unique key is generated
         while True:
-            key = self.generate_key(length=self.key_len)
+            key = self.generate_key()
             if not Signing.query.filter_by(signature=key).first(): break
 
         new_key = Signing(
