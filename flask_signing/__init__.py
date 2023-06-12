@@ -6,8 +6,7 @@ __license__ = "BSD-3-Clause"
 __maintainer__ = "Sig Janoska-Bedi"
 __email__ = "signe@atreeus.com"
 
-import os, datetime, secrets, threading, time, functools
-from flask import current_app, flash, redirect, url_for, abort
+import datetime, secrets
 from flask_signing.models import Signing, db
 
 
@@ -29,17 +28,19 @@ class Signatures:
         self.db = database
         self.key_len = key_len
 
-    def generate_key(self, length:int=24) -> str:
+    def generate_key(self, length:int=None) -> str:
         """
         Generates a signing key with the specified length.
 
         Args:
-            length (int, optional): The length of the generated signing key. Defaults to 24.
+            length (int, optional): The length of the generated signing key. Defaults to None.
 
         Returns:
             str: The generated signing key.
         """
 
+        if not length: 
+            length = self.key_len
         return secrets.token_urlsafe(length)
 
     def write_key_to_database(self, scope:str=None, expiration:int=1, active:bool=True, email:str=None) -> str:
