@@ -32,6 +32,7 @@ from flask_signing import Signatures
 
 app = Flask(__name__)
 app.config['SQLALCHEMY_DATABASE_URI'] = 'sqlite://'  # Use your actual database URI
+app.secret_key = "Your_Key_Here"
 
 with app.app_context():
     signatures = Signatures(app, byte_len=24)

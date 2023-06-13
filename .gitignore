@@ -132,3 +132,4 @@ dmypy.json
 ### project specific files 
 ##########################
 excludes/*
+.secret_key
