@@ -35,3 +35,6 @@ def query():
 def all():
     all = signatures.query_all()
     return f'Response: {all}'
+
+if __name__=="__main__":
+    app.run(debug=True)
