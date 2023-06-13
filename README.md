@@ -1,9 +1,11 @@
+![Signing logo](docs/combined.png)
+
+## Flask-Signing
+
 [![License: BSD-3-Clause](https://img.shields.io/github/license/signebedi/Flask-Signing)](https://github.com/signebedi/Flask-Signing/blob/master/LICENSE) 
 [![PyPI version](https://badge.fury.io/py/Flask-Signing.svg)](https://pypi.org/project/flask-signing/)
 [![Flask-Signing tests](https://github.com/signebedi/Flask-Signing/workflows/tests/badge.svg)](https://github.com/signebedi/Flask-Signing/actions)
 
-
-## Flask-Signing
 a signing key extension for flask
 
 
