@@ -51,9 +51,17 @@ class TestFlaskSigning(unittest.TestCase):
     #     self.signatures.expire_key(key)
     #     self.assertFalse(Signing.query.filter_by(signature=key).first().active)
 
-    def test_write_and_expire_key(self):
+    def test_write_and_expire_key_string_scope(self):
         with self.app.app_context():
             key = self.signatures.write_key_to_database(scope='test')
+            Signing = self.signatures.get_model()
+            self.assertIsNotNone(Signing.query.filter_by(signature=key).first())
+            self.signatures.expire_key(key)
+            self.assertFalse(Signing.query.filter_by(signature=key).first().active)
+
+    def test_write_and_expire_key_list_scope(self):
+        with self.app.app_context():
+            key = self.signatures.write_key_to_database(scope=['test', 'task', 'tusk'])
             Signing = self.signatures.get_model()
             self.assertIsNotNone(Signing.query.filter_by(signature=key).first())
             self.signatures.expire_key(key)
