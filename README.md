@@ -52,8 +52,12 @@ def expire(key):
     expired = signatures.expire_key(key)
     return f'Key expired: {expired}'
     
+@app.route('/all')
+def all():
+    all = signatures.query_all()
+    return f'Response: {all}'
 ```
 
-In this example, a new signing key is generated and written to the database when you visit the /sign route, and the key is displayed on the page. Then, when you visit the /verify/<key> route (replace <key> with the actual key), the validity of the key is checked and displayed. Finally, you can expire a key using the /expire/<key> route described above.
+In this example, a new signing key is generated and written to the database when you visit the /sign route, and the key is displayed on the page. Then, when you visit the /verify/<key> route (replace <key> with the actual key), the validity of the key is checked and displayed. You can expire a key using the /expire/<key> route, and view all records with the /all route.
 
 Please note that this is a very basic example and your actual use of the flask_signing package may be more complex depending on your needs. It's important to secure your signing keys and handle them appropriately according to your application's security requirements.
