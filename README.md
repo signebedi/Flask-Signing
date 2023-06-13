@@ -11,7 +11,7 @@ a signing key extension for flask
 
 ### About
 
-The Flask-Signing library is a useful tool for Flask applications that requires secure and robust management of signing keys. This package aids in managing API keys, ensuring only clients with valid permissions can access your resources. Do you need to generate single-use tokens for one-time actions like email verification or password reset? Flask-Signing can handle that. In theory, it can also help manage session IDs. For applications that implement JWT or OAuth2, Flask-Signing can generate and manage the signing keys for your tokens. You can also use it to verify webhook payloads or to implement a licensing system for your software. 
+The Flask-Signing library is a useful tool for Flask applications that require secure and robust management of signing keys. Do you need to generate single-use tokens for one-time actions like email verification or password reset? Flask-Signing can handle that. Are you looking for a simple method for managing API keys? Look no further. 
 
 ### Installation
 
@@ -54,6 +54,6 @@ def expire(key):
     
 ```
 
-In this example, a new signing key is generated and written to the database when you visit the /sign route, and the key is displayed on the page. Then, when you visit the /verify/<key> route (replace <key> with the actual key), the validity of the key is checked and displayed. Finally, you can expire a key using the /expier/<key> route.
+In this example, a new signing key is generated and written to the database when you visit the /sign route, and the key is displayed on the page. Then, when you visit the /verify/<key> route (replace <key> with the actual key), the validity of the key is checked and displayed. Finally, you can expire a key using the /expire/<key> route described above.
 
 Please note that this is a very basic example and your actual use of the flask_signing package may be more complex depending on your needs. It's important to secure your signing keys and handle them appropriately according to your application's security requirements.
