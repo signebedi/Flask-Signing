@@ -88,7 +88,7 @@ class TestFlaskSigning(unittest.TestCase):
 
             # Test querying by scope
             result = self.signatures.query_keys(scope='test1')
-            self.assertTrue(all(record['scope'] == 'test1' for record in result))
+            self.assertTrue(all(record['scope'] == ['test1'] for record in result))
 
             # Test querying by email
             result = self.signatures.query_keys(email='test2@example.com')
