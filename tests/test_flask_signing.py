@@ -34,14 +34,14 @@ class TestFlaskSigning(unittest.TestCase):
         for keys of various byte lengths
         """
 
-        for i in range(1, 256*2):
+        for i in range(4, 256*2):
             with self.app.app_context():
-                key = self.signatures.generate_key()
+                key = self.signatures.generate_key(length=i)
 
             # implemented the logic below because the string length is generally 1.3 times 
             # the byte length https://docs.python.org/3/library/secrets.html
             # self.assertEqual(len(key), self.signatures.byte_len)
-            self.assertTrue(self.signatures.byte_len < len(key) < 1.6*self.signatures.byte_len)
+            self.assertTrue(i < len(key) < 2*i)
             self.assertIsInstance(key, str)
 
     # def test_write_and_expire_key(self):
