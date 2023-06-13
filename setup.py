@@ -18,7 +18,10 @@ setup(
     long_description=long_description,
     long_description_content_type="text/markdown",
     packages=find_packages(),
-    install_requires=install_requires,
+    install_requires=[
+        'Flask<3.0.0',
+        'Flask-SQLAlchemy<4.0.0',
+    ],
     classifiers=[
         'Development Status :: 3 - Alpha',
         'Intended Audience :: Developers',
