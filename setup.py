@@ -1,5 +1,13 @@
 from setuptools import setup, find_packages
 
+# Read README for long_description
+with open("README.md", "r", encoding="utf-8") as fh:
+    long_description = fh.read()
+
+# Read requirements.txt for install_requires
+with open("requirements.txt", "r", encoding="utf-8") as fr:
+    install_requires = fr.read().splitlines()
+
 setup(
     name='flask_signing',
     version='0.2.0',
@@ -7,11 +15,10 @@ setup(
     author='Sig Janoska-Bedi',
     author_email='signe@atreeus.com',
     description='a signing key extension for flask',
-    packages=find_packages(),  
-    install_requires=[
-        'Flask<3.0.0',
-        'Flask-SQLAlchemy<4.0.0',
-    ],
+    long_description=long_description,
+    long_description_content_type="text/markdown",
+    packages=find_packages(),
+    install_requires=install_requires,
     classifiers=[
         'Development Status :: 3 - Alpha',
         'Intended Audience :: Developers',
