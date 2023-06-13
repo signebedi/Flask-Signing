@@ -251,3 +251,15 @@ class Signatures:
             return False
 
         return [{'signature': key.signature, 'email': key.email, 'scope': key.scope, 'active': key.active, 'timestamp': key.timestamp, 'expiration': key.expiration} for key in result]
+
+    def query_all(self) -> List[Dict[str, Any]]:
+
+        """
+        Query all values in the Signing table.
+        If no keys are found, it returns an empty list.
+
+        Returns:
+            List[Dict[str, Any]]: A list of dictionaries where each dictionary contains the details of a signing key.
+
+        """
+        return [{'signature': key.signature, 'email': key.email, 'scope': key.scope, 'active': key.active, 'timestamp': key.timestamp, 'expiration': key.expiration} for key in self.get_model().query.all()]

@@ -30,8 +30,7 @@ def query():
     query = signatures.query_keys(scope='test')
     return f'Response: {query}'
 
-
 @app.route('/all')
 def all():
-    all = signatures.all()
+    all = signatures.query_all()
     return f'Response: {all}'
