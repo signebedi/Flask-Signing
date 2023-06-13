@@ -41,7 +41,7 @@ class TestFlaskSigning(unittest.TestCase):
             # implemented the logic below because the string length is generally 1.3 times 
             # the byte length https://docs.python.org/3/library/secrets.html
             # self.assertEqual(len(key), self.signatures.byte_len)
-            self.assertTrue(i < len(key) < 2*i)
+            self.assertTrue(i < len(key) < 1.6*i)
             self.assertIsInstance(key, str)
 
     # def test_write_and_expire_key(self):
