@@ -11,7 +11,7 @@ with app.app_context():
 
 @app.route('/sign')
 def sign():
-    key = signatures.write_key_to_database(scope='test', expiration=1, active=True, email='test@example.com')
+    key = signatures.write_key_to_database(scope=['test', 'task', 'tusk'], expiration=1, active=True, email='test@example.com')
     return f'Key generated: {key}'
 
 @app.route('/verify/<key>')
@@ -24,3 +24,14 @@ def expire(key):
     expired = signatures.expire_key(key)
     return f'Key expired: {expired}'
 
+
+@app.route('/query')
+def query():
+    query = signatures.query_keys(scope='test')
+    return f'Response: {query}'
+
+
+@app.route('/all')
+def all():
+    all = signatures.all()
+    return f'Response: {all}'

@@ -7,6 +7,7 @@ __maintainer__ = "Sig Janoska-Bedi"
 __email__ = "signe@atreeus.com"
 
 import datetime, secrets
+from sqlalchemy import func, literal
 from flask_sqlalchemy import SQLAlchemy
 from typing import Union, List, Dict, Any
 
@@ -72,9 +73,14 @@ class Signatures:
             key = self.generate_key()
             if not Signing.query.filter_by(signature=key).first(): break
 
+        # Convert scope to a list if it's a string
+        if isinstance(scope, str):
+            scope = [scope]
+
         new_key = Signing(
                         signature=key, 
-                        scope=scope.lower() if scope else "",
+                        # scope=scope.lower() if scope else "",
+                        scope=[s.lower() for s in scope] if scope else [],
                         email=email.lower() if email else "", 
                         active=active,
                         expiration=(datetime.datetime.utcnow() + datetime.timedelta(hours=expiration)) if expiration else 0,
@@ -146,9 +152,17 @@ class Signatures:
         if not signing_key.active:
             return False
 
-        # if the signing key's scope doesn't match the required scope
-        if signing_key.scope != scope:
+        # Convert scope to a list if it's a string
+        if isinstance(scope, str):
+            scope = [scope]
+
+        # if the signing key's scope doesn't match any of the required scopes
+        if not set(scope).intersection(set(signing_key.scope)):
             return False
+
+        # # if the signing key's scope doesn't match the required scope
+        # if signing_key.scope != scope:
+        #     return False
 
         return True
 
@@ -173,7 +187,9 @@ class Signatures:
                 __tablename__ = 'signing'
                 signature = self.db.Column(self.db.String(1000), primary_key=True) 
                 email = self.db.Column(self.db.String(100))
-                scope = self.db.Column(self.db.String(100))
+                # scope = self.db.Column(self.db.String(100))
+                # scope = self.db.Column(self.db.MutableList.as_mutable(self.db.String(100)), default=[]),
+                scope = self.db.Column(self.db.JSON())
                 active = self.db.Column(self.db.Boolean)
                 timestamp = self.db.Column(self.db.DateTime, nullable=False, default=datetime.datetime.utcnow)
                 expiration = self.db.Column(self.db.DateTime, nullable=False, default=datetime.datetime.utcnow)
@@ -206,8 +222,26 @@ class Signatures:
 
         if active is not None:
             query = query.filter(Signing.active == active)
+
+        # Convert scope to a list if it's a string
+        if isinstance(scope, str):
+            scope = [scope]
+
         if scope:
-            query = query.filter(Signing.scope == scope)
+
+            for s in scope:
+                # https://stackoverflow.com/a/44250678/13301284
+                query = query.filter(Signing.scope.comparator.contains(s))
+
+                # https://stackoverflow.com/a/39470478/13301284
+                # query = query.filter(func.json_contains(Signing.scope, s) == 1)
+                # query = query.filter(literal(s).bool_op('MEMBER OF')(Signing.scope.self_group()))
+                
+            # query = query.filter(Signing.scope.in_(scope))
+            
+        # if scope:
+        #     query = query.filter(Signing.scope == scope)
+
         if email:
             query = query.filter(Signing.email == email)
 
