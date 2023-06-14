@@ -36,6 +36,7 @@ __email__ = &#34;signe@atreeus.com&#34;
 
 import datetime, secrets
 from sqlalchemy import func, literal
+from sqlalchemy.exc import SQLAlchemyError
 from flask_sqlalchemy import SQLAlchemy
 from typing import Union, List, Dict, Any
 
@@ -290,7 +291,103 @@ class Signatures:
             List[Dict[str, Any]]: A list of dictionaries where each dictionary contains the details of a signing key.
 
         &#34;&#34;&#34;
-        return [{&#39;signature&#39;: key.signature, &#39;email&#39;: key.email, &#39;scope&#39;: key.scope, &#39;active&#39;: key.active, &#39;timestamp&#39;: key.timestamp, &#39;expiration&#39;: key.expiration} for key in self.get_model().query.all()]</code></pre>
+        return [{&#39;signature&#39;: key.signature, &#39;email&#39;: key.email, &#39;scope&#39;: key.scope, &#39;active&#39;: key.active, &#39;timestamp&#39;: key.timestamp, &#39;expiration&#39;: key.expiration} for key in self.get_model().query.all()]
+
+
+    def rotate_keys(self, time_until:int=1, scope=None) -&gt; bool:
+        &#34;&#34;&#34;
+        Rotates all keys that are about to expire.
+        This is written with the background processes in mind. This can be wrapped in a celerybeat schedule or celery task.
+        Args:
+            time_until (int): rotate keys that are set to expire in this many hours.
+            scope (str, list): rotate keys within this scope. If None, all scopes are considered.
+        Returns:
+            bool: operation succeeded/failed.
+        &#34;&#34;&#34;
+        try:
+            Signing = self.get_model()
+
+            # get keys that will expire in the next time_until hours
+            query = Signing.query.filter(
+                Signing.expiration &lt;= (datetime.datetime.utcnow() + datetime.timedelta(hours=time_until)),
+                Signing.active == True
+            )
+
+            # if scope is not None:
+            #     if isinstance(scope, list):
+            #         query = query.filter(Signing.scope.in_(scope))
+            #     else:
+            #         query = query.filter_by(scope=scope)
+
+            # Convert scope to a list if it&#39;s a string
+            if isinstance(scope, str):
+                scope = [scope]
+
+            if scope:
+
+                for s in scope:
+                    # https://stackoverflow.com/a/44250678/13301284
+                    query = query.filter(Signing.scope.comparator.contains(s))
+
+            expiring_keys = query.all()
+
+            for key in expiring_keys:
+                self.rotate_key(key.signature)
+
+        except SQLAlchemyError as e:
+            # This will catch any SQLAlchemy related exceptions
+            print(f&#34;An error occurred while rotating keys: {e}&#34;)
+            return False
+
+        except Exception as e:
+            # This will catch any other kind of unexpected exceptions
+            print(f&#34;An unexpected error occurred: {e}&#34;)
+            return False
+
+        # We may need to potentially modify the return behavior to provide greater detail ... 
+        # for example, a list of old keys mapped to their new keys and emails.
+        return True
+
+    def rotate_key(self, key: str, expiration:int=1) -&gt; str:
+        &#34;&#34;&#34;
+        Replaces an active key with a new key with the same properties, and sets the old key as inactive.
+        Args:
+            key (str): The signing key to be rotated.
+            expiration (int): The number of hours until the new key will expire.
+        Returns:
+            str: The new signing key.
+        &#34;&#34;&#34;
+        try:
+            Signing = self.get_model()
+
+            signing_key = Signing.query.filter_by(signature=key).first()
+
+            if not signing_key:
+                raise ValueError(&#34;No such key exists&#34;)
+
+            # Disable old key
+            signing_key.active = False
+            self.db.session.flush()
+
+            # Generate a new key with the same properties
+            new_key = self.write_key_to_database(
+                scope=signing_key.scope, 
+                expiration=expiration, 
+                active=True, 
+                email=signing_key.email
+            )
+            
+            self.db.session.commit()
+
+        except SQLAlchemyError as e:
+            # print(f&#34;An error occurred while rotating the key {key}: {e}&#34;)
+            return False
+
+        except Exception as e:
+            # print(f&#34;An unexpected error occurred: {e}&#34;)
+            return False
+
+        return new_key</code></pre>
 </details>
 </section>
 <section>
@@ -572,7 +669,103 @@ of signing keys in the database.</p>
             List[Dict[str, Any]]: A list of dictionaries where each dictionary contains the details of a signing key.
 
         &#34;&#34;&#34;
-        return [{&#39;signature&#39;: key.signature, &#39;email&#39;: key.email, &#39;scope&#39;: key.scope, &#39;active&#39;: key.active, &#39;timestamp&#39;: key.timestamp, &#39;expiration&#39;: key.expiration} for key in self.get_model().query.all()]</code></pre>
+        return [{&#39;signature&#39;: key.signature, &#39;email&#39;: key.email, &#39;scope&#39;: key.scope, &#39;active&#39;: key.active, &#39;timestamp&#39;: key.timestamp, &#39;expiration&#39;: key.expiration} for key in self.get_model().query.all()]
+
+
+    def rotate_keys(self, time_until:int=1, scope=None) -&gt; bool:
+        &#34;&#34;&#34;
+        Rotates all keys that are about to expire.
+        This is written with the background processes in mind. This can be wrapped in a celerybeat schedule or celery task.
+        Args:
+            time_until (int): rotate keys that are set to expire in this many hours.
+            scope (str, list): rotate keys within this scope. If None, all scopes are considered.
+        Returns:
+            bool: operation succeeded/failed.
+        &#34;&#34;&#34;
+        try:
+            Signing = self.get_model()
+
+            # get keys that will expire in the next time_until hours
+            query = Signing.query.filter(
+                Signing.expiration &lt;= (datetime.datetime.utcnow() + datetime.timedelta(hours=time_until)),
+                Signing.active == True
+            )
+
+            # if scope is not None:
+            #     if isinstance(scope, list):
+            #         query = query.filter(Signing.scope.in_(scope))
+            #     else:
+            #         query = query.filter_by(scope=scope)
+
+            # Convert scope to a list if it&#39;s a string
+            if isinstance(scope, str):
+                scope = [scope]
+
+            if scope:
+
+                for s in scope:
+                    # https://stackoverflow.com/a/44250678/13301284
+                    query = query.filter(Signing.scope.comparator.contains(s))
+
+            expiring_keys = query.all()
+
+            for key in expiring_keys:
+                self.rotate_key(key.signature)
+
+        except SQLAlchemyError as e:
+            # This will catch any SQLAlchemy related exceptions
+            print(f&#34;An error occurred while rotating keys: {e}&#34;)
+            return False
+
+        except Exception as e:
+            # This will catch any other kind of unexpected exceptions
+            print(f&#34;An unexpected error occurred: {e}&#34;)
+            return False
+
+        # We may need to potentially modify the return behavior to provide greater detail ... 
+        # for example, a list of old keys mapped to their new keys and emails.
+        return True
+
+    def rotate_key(self, key: str, expiration:int=1) -&gt; str:
+        &#34;&#34;&#34;
+        Replaces an active key with a new key with the same properties, and sets the old key as inactive.
+        Args:
+            key (str): The signing key to be rotated.
+            expiration (int): The number of hours until the new key will expire.
+        Returns:
+            str: The new signing key.
+        &#34;&#34;&#34;
+        try:
+            Signing = self.get_model()
+
+            signing_key = Signing.query.filter_by(signature=key).first()
+
+            if not signing_key:
+                raise ValueError(&#34;No such key exists&#34;)
+
+            # Disable old key
+            signing_key.active = False
+            self.db.session.flush()
+
+            # Generate a new key with the same properties
+            new_key = self.write_key_to_database(
+                scope=signing_key.scope, 
+                expiration=expiration, 
+                active=True, 
+                email=signing_key.email
+            )
+            
+            self.db.session.commit()
+
+        except SQLAlchemyError as e:
+            # print(f&#34;An error occurred while rotating the key {key}: {e}&#34;)
+            return False
+
+        except Exception as e:
+            # print(f&#34;An unexpected error occurred: {e}&#34;)
+            return False
+
+        return new_key</code></pre>
 </details>
 <h3>Methods</h3>
 <dl>
@@ -829,6 +1022,146 @@ If no keys are found, it returns False.</p>
     return [{&#39;signature&#39;: key.signature, &#39;email&#39;: key.email, &#39;scope&#39;: key.scope, &#39;active&#39;: key.active, &#39;timestamp&#39;: key.timestamp, &#39;expiration&#39;: key.expiration} for key in result]</code></pre>
 </details>
 </dd>
+<dt id="flask_signing.Signatures.rotate_key"><code class="name flex">
+<span>def <span class="ident">rotate_key</span></span>(<span>self, key: str, expiration: int = 1) ‑> str</span>
+</code></dt>
+<dd>
+<div class="desc"><p>Replaces an active key with a new key with the same properties, and sets the old key as inactive.</p>
+<h2 id="args">Args</h2>
+<dl>
+<dt><strong><code>key</code></strong> :&ensp;<code>str</code></dt>
+<dd>The signing key to be rotated.</dd>
+<dt><strong><code>expiration</code></strong> :&ensp;<code>int</code></dt>
+<dd>The number of hours until the new key will expire.</dd>
+</dl>
+<h2 id="returns">Returns</h2>
+<dl>
+<dt><code>str</code></dt>
+<dd>The new signing key.</dd>
+</dl></div>
+<details class="source">
+<summary>
+<span>Expand source code</span>
+</summary>
+<pre><code class="python">def rotate_key(self, key: str, expiration:int=1) -&gt; str:
+    &#34;&#34;&#34;
+    Replaces an active key with a new key with the same properties, and sets the old key as inactive.
+    Args:
+        key (str): The signing key to be rotated.
+        expiration (int): The number of hours until the new key will expire.
+    Returns:
+        str: The new signing key.
+    &#34;&#34;&#34;
+    try:
+        Signing = self.get_model()
+
+        signing_key = Signing.query.filter_by(signature=key).first()
+
+        if not signing_key:
+            raise ValueError(&#34;No such key exists&#34;)
+
+        # Disable old key
+        signing_key.active = False
+        self.db.session.flush()
+
+        # Generate a new key with the same properties
+        new_key = self.write_key_to_database(
+            scope=signing_key.scope, 
+            expiration=expiration, 
+            active=True, 
+            email=signing_key.email
+        )
+        
+        self.db.session.commit()
+
+    except SQLAlchemyError as e:
+        # print(f&#34;An error occurred while rotating the key {key}: {e}&#34;)
+        return False
+
+    except Exception as e:
+        # print(f&#34;An unexpected error occurred: {e}&#34;)
+        return False
+
+    return new_key</code></pre>
+</details>
+</dd>
+<dt id="flask_signing.Signatures.rotate_keys"><code class="name flex">
+<span>def <span class="ident">rotate_keys</span></span>(<span>self, time_until: int = 1, scope=None) ‑> bool</span>
+</code></dt>
+<dd>
+<div class="desc"><p>Rotates all keys that are about to expire.
+This is written with the background processes in mind. This can be wrapped in a celerybeat schedule or celery task.</p>
+<h2 id="args">Args</h2>
+<dl>
+<dt><strong><code>time_until</code></strong> :&ensp;<code>int</code></dt>
+<dd>rotate keys that are set to expire in this many hours.</dd>
+<dt><strong><code>scope</code></strong> :&ensp;<code>str, list</code></dt>
+<dd>rotate keys within this scope. If None, all scopes are considered.</dd>
+</dl>
+<h2 id="returns">Returns</h2>
+<dl>
+<dt><code>bool</code></dt>
+<dd>operation succeeded/failed.</dd>
+</dl></div>
+<details class="source">
+<summary>
+<span>Expand source code</span>
+</summary>
+<pre><code class="python">def rotate_keys(self, time_until:int=1, scope=None) -&gt; bool:
+    &#34;&#34;&#34;
+    Rotates all keys that are about to expire.
+    This is written with the background processes in mind. This can be wrapped in a celerybeat schedule or celery task.
+    Args:
+        time_until (int): rotate keys that are set to expire in this many hours.
+        scope (str, list): rotate keys within this scope. If None, all scopes are considered.
+    Returns:
+        bool: operation succeeded/failed.
+    &#34;&#34;&#34;
+    try:
+        Signing = self.get_model()
+
+        # get keys that will expire in the next time_until hours
+        query = Signing.query.filter(
+            Signing.expiration &lt;= (datetime.datetime.utcnow() + datetime.timedelta(hours=time_until)),
+            Signing.active == True
+        )
+
+        # if scope is not None:
+        #     if isinstance(scope, list):
+        #         query = query.filter(Signing.scope.in_(scope))
+        #     else:
+        #         query = query.filter_by(scope=scope)
+
+        # Convert scope to a list if it&#39;s a string
+        if isinstance(scope, str):
+            scope = [scope]
+
+        if scope:
+
+            for s in scope:
+                # https://stackoverflow.com/a/44250678/13301284
+                query = query.filter(Signing.scope.comparator.contains(s))
+
+        expiring_keys = query.all()
+
+        for key in expiring_keys:
+            self.rotate_key(key.signature)
+
+    except SQLAlchemyError as e:
+        # This will catch any SQLAlchemy related exceptions
+        print(f&#34;An error occurred while rotating keys: {e}&#34;)
+        return False
+
+    except Exception as e:
+        # This will catch any other kind of unexpected exceptions
+        print(f&#34;An unexpected error occurred: {e}&#34;)
+        return False
+
+    # We may need to potentially modify the return behavior to provide greater detail ... 
+    # for example, a list of old keys mapped to their new keys and emails.
+    return True</code></pre>
+</details>
+</dd>
 <dt id="flask_signing.Signatures.verify_signature"><code class="name flex">
 <span>def <span class="ident">verify_signature</span></span>(<span>self, signature, scope)</span>
 </code></dt>
@@ -993,6 +1326,8 @@ If not provided or equals 0, the expiration will be set to zero. Defaults to 1.<
 <li><code><a title="flask_signing.Signatures.get_model" href="#flask_signing.Signatures.get_model">get_model</a></code></li>
 <li><code><a title="flask_signing.Signatures.query_all" href="#flask_signing.Signatures.query_all">query_all</a></code></li>
 <li><code><a title="flask_signing.Signatures.query_keys" href="#flask_signing.Signatures.query_keys">query_keys</a></code></li>
+<li><code><a title="flask_signing.Signatures.rotate_key" href="#flask_signing.Signatures.rotate_key">rotate_key</a></code></li>
+<li><code><a title="flask_signing.Signatures.rotate_keys" href="#flask_signing.Signatures.rotate_keys">rotate_keys</a></code></li>
 <li><code><a title="flask_signing.Signatures.verify_signature" href="#flask_signing.Signatures.verify_signature">verify_signature</a></code></li>
 <li><code><a title="flask_signing.Signatures.write_key_to_database" href="#flask_signing.Signatures.write_key_to_database">write_key_to_database</a></code></li>
 </ul>
