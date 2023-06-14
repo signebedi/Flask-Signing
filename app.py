@@ -36,5 +36,27 @@ def all():
     all = signatures.query_all()
     return f'Response: {all}'
 
+@app.route('/rotate/<key>', methods=['GET'])
+def rotate_key(key):
+    try:
+        new_key = signatures.rotate_key(key, expiration=1/60)
+        if new_key:
+            return f'Old key: {key} has been replaced with new key: {new_key}'
+        else:
+            return f'Failed to rotate key: {key}', 400
+    except Exception as e:
+        return str(e), 500
+
+@app.route('/rotate_keys/<int:time_until>', methods=['GET'])
+def rotate_keys(time_until):
+    try:
+        success = signatures.rotate_keys(time_until)
+        if success:
+            return f'Successfully rotated keys expiring in next {time_until} hours'
+        else:
+            return 'Failed to rotate keys', 400
+    except Exception as e:
+        return str(e), 500
+
 if __name__=="__main__":
     app.run(debug=True)
