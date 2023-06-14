@@ -66,4 +66,4 @@ Please note that this is a very basic example and your actual use of the flask_s
 
 ### Developers
 
-Contributions are welcome! You can read the developer docs at https://signebedi.github.io/Flask-Signing/flask_signing/. If you're interested, review (or add to) the feature ideas at https://github.com/signebedi/Flask-Signing/issues.
+Contributions are welcome! You can read the developer docs at https://signebedi.github.io/Flask-Signing. If you're interested, review (or add to) the feature ideas at https://github.com/signebedi/Flask-Signing/issues.
