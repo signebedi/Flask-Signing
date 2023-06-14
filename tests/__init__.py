@@ -1,5 +1,4 @@
-import os
-import unittest
+import os, datetime, unittest
 from flask import Flask
 from flask_sqlalchemy import SQLAlchemy
 from flask_signing import Signatures
@@ -114,6 +113,71 @@ class TestFlaskSigning(unittest.TestCase):
             # Test querying with no results
             result = self.signatures.query_keys(active=True, scope='non-existent-scope')
             self.assertFalse(result)
+
+    def test_rotate_key(self):
+        """
+        Test if a key can be rotated and replaced with a new one.
+        """
+        with self.app.app_context():
+            key = self.signatures.write_key_to_database(scope='test')
+            Signing = self.signatures.get_model()
+            signing_key = Signing.query.filter_by(signature=key).first()
+
+            # Rotate the key
+            new_key = self.signatures.rotate_key(key)
+
+            # Check that the new key is different
+            self.assertNotEqual(new_key, key)
+
+            # Check that the old key is now inactive
+            self.assertFalse(signing_key.active)
+
+            # Check that the new key is in the database and active
+            new_signing_key = Signing.query.filter_by(signature=new_key).first()
+            self.assertIsNotNone(new_signing_key)
+            self.assertTrue(new_signing_key.active)
+
+            # Check that the new key has the same properties as the old one
+            self.assertEqual(signing_key.scope, new_signing_key.scope)
+            self.assertEqual(signing_key.email, new_signing_key.email)
+            # convert expiration to hours for comparison
+            self.assertEqual((signing_key.expiration - datetime.datetime.utcnow()).seconds // 3600, 
+                             (new_signing_key.expiration - datetime.datetime.utcnow()).seconds // 3600)
+
+
+    def test_rotate_keys(self):
+        """
+        Test if multiple keys can be rotated.
+        """
+        with self.app.app_context():
+            # Create keys that will expire soon
+            soon_expire_key1 = self.signatures.write_key_to_database(scope='test1', expiration=1)
+            soon_expire_key2 = self.signatures.write_key_to_database(scope='test2', expiration=1)
+
+            # Create a key that won't expire soon
+            late_expire_key = self.signatures.write_key_to_database(scope='test3', expiration=2)
+
+            # Rotate keys
+            self.signatures.rotate_keys(time_until=1)
+
+            # Check that the keys that were about to expire have been rotated
+            Signing = self.signatures.get_model()
+            soon_expire_signing_key1 = Signing.query.filter_by(signature=soon_expire_key1).first()
+            soon_expire_signing_key2 = Signing.query.filter_by(signature=soon_expire_key2).first()
+            self.assertFalse(soon_expire_signing_key1.active)
+            self.assertFalse(soon_expire_signing_key2.active)
+
+            # Check that the key that wasn't about to expire hasn't been rotated
+            late_expire_signing_key = Signing.query.filter_by(signature=late_expire_key).first()
+            self.assertTrue(late_expire_signing_key.active)
+
+            # Test rotating keys with a specific scope
+            self.signatures.rotate_keys(time_until=2, scope='test3')
+
+            # Check that the key with the specific scope has been rotated
+            late_expire_signing_key = Signing.query.filter_by(signature=late_expire_key).first()
+            self.assertFalse(late_expire_signing_key.active)
+
 
 
 if __name__ == '__main__':
