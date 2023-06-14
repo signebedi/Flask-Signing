@@ -320,17 +320,16 @@ class Signatures:
         # for example, a list of old keys mapped to their new keys and emails.
         return True
 
-    def rotate_key(self, key: str, expiration: int = 1) -> str:
+    def rotate_key(self, key: str, expiration:int=1) -> str:
         """
         Replaces an active key with a new key with the same properties, and sets the old key as inactive.
         Args:
             key (str): The signing key to be rotated.
-            expiration (int): The number of hours until the new key will expire. Defaults to 1.
+            expiration (int): The number of hours until the new key will expire.
         Returns:
             str: The new signing key.
         """
         try:
-
             Signing = self.get_model()
 
             signing_key = Signing.query.filter_by(signature=key).first()
@@ -340,24 +339,23 @@ class Signatures:
 
             # Disable old key
             signing_key.active = False
+            self.db.session.flush()
 
             # Generate a new key with the same properties
             new_key = self.write_key_to_database(
                 scope=signing_key.scope, 
-                expiration=(datetime.datetime.utcnow() + datetime.timedelta(hours=expiration)),
-                timestamp=datetime.datetime.utcnow(),
+                expiration=expiration, 
                 active=True, 
-                email=signing_key.email)
-
+                email=signing_key.email
+            )
+            
             self.db.session.commit()
 
         except SQLAlchemyError as e:
-            # This will catch any SQLAlchemy related exceptions
             # print(f"An error occurred while rotating the key {key}: {e}")
             return False
 
         except Exception as e:
-            # This will catch any other kind of unexpected exceptions
             # print(f"An unexpected error occurred: {e}")
             return False
 
