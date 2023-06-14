@@ -1,4 +1,4 @@
-![Signing logo](docs/combined.png)
+![Signing logo](https://raw.githubusercontent.com/signebedi/Flask-Signing/master/docs/combined.png)
 
 ## Flask-Signing
 
@@ -62,3 +62,7 @@ def all():
 In this example, a new signing key is generated and written to the database when you visit the /sign route, and the key is displayed on the page. Then, when you visit the /verify/<key> route (replace <key> with the actual key), the validity of the key is checked and displayed. You can expire a key using the /expire/<key> route, and view all records with the /all route.
 
 Please note that this is a very basic example and your actual use of the flask_signing package may be more complex depending on your needs. It's important to secure your signing keys and handle them appropriately according to your application's security requirements.
+
+### Developers
+
+Contributions are welcome! You can read the developer docs at https://signebedi.github.io/Flask-Signing/flask_signing/. If you're interested, review (or add to) the feature ideas at https://github.com/signebedi/Flask-Signing/issues.
