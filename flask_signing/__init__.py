@@ -8,6 +8,7 @@ __email__ = "signe@atreeus.com"
 
 import datetime, secrets
 from sqlalchemy import func, literal
+from sqlalchemy.exc import SQLAlchemyError
 from flask_sqlalchemy import SQLAlchemy
 from typing import Union, List, Dict, Any
 
@@ -263,3 +264,76 @@ class Signatures:
 
         """
         return [{'signature': key.signature, 'email': key.email, 'scope': key.scope, 'active': key.active, 'timestamp': key.timestamp, 'expiration': key.expiration} for key in self.get_model().query.all()]
+
+
+
+    def rotate_keys(self, time_until:int=1) -> bool:
+        """
+        Rotates all keys that are about to expire.
+        This is written with the background processes in mind. This can be wrapped in a celerybeat schedule or celery task.
+        Args:
+            time_until (str): rotate keys that are set to expire in this many hours.
+        Returns:
+            bool: operation succeeded/failed.
+        """
+        try:
+            Signing = self.get_model()
+
+            # get keys that will expire in the next time_until hours
+            expiring_keys = Signing.query.filter(
+                Signing.expiration <= (datetime.datetime.utcnow() + datetime.timedelta(hours=time_until)),
+                Signing.active == True
+            ).all()
+
+            for key in expiring_keys:
+                self.rotate_key(key.signature)
+
+        except SQLAlchemyError as e:
+            # This will catch any SQLAlchemy related exceptions
+            print(f"An error occurred while rotating keys: {e}")
+            return False
+
+        except Exception as e:
+            # This will catch any other kind of unexpected exceptions
+            print(f"An unexpected error occurred: {e}")
+            return False
+
+
+        # We may need to potentially modify the return behavior to provide greater detail ... 
+        # for example, a list of old keys mapped to their new keys and emails.
+        return True
+
+    def rotate_key(self, signature) -> str:
+    
+        """
+        Replaces an active key with a new key with the same properties, and sets the old key as inactive.
+        Args:
+            key (str): The signing key to be rotated.
+        Returns:
+            str: The new signing key.
+        """
+
+        try:
+            Signing = self.get_model()
+
+            # retrieve the key
+            key = Signing.query.filter(Signing.signature == signature, Signing.active == True).first()
+
+            if key is not None:
+                # rotate the key
+                key.active = False
+
+                # commit the changes
+                db.session.commit()
+
+        except SQLAlchemyError as e:
+            # This will catch any SQLAlchemy related exceptions
+            print(f"An error occurred while rotating the key {signature}: {e}")
+            return False
+
+        except Exception as e:
+            # This will catch any other kind of unexpected exceptions
+            print(f"An unexpected error occurred: {e}")
+            return False
+
+        return key
