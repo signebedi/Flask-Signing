@@ -266,13 +266,13 @@ class Signatures:
         return [{'signature': key.signature, 'email': key.email, 'scope': key.scope, 'active': key.active, 'timestamp': key.timestamp, 'expiration': key.expiration} for key in self.get_model().query.all()]
 
 
-
-    def rotate_keys(self, time_until:int=1) -> bool:
+    def rotate_keys(self, time_until:int=1, scope=None) -> bool:
         """
         Rotates all keys that are about to expire.
         This is written with the background processes in mind. This can be wrapped in a celerybeat schedule or celery task.
         Args:
-            time_until (str): rotate keys that are set to expire in this many hours.
+            time_until (int): rotate keys that are set to expire in this many hours.
+            scope (str, list): rotate keys within this scope. If None, all scopes are considered.
         Returns:
             bool: operation succeeded/failed.
         """
@@ -280,10 +280,28 @@ class Signatures:
             Signing = self.get_model()
 
             # get keys that will expire in the next time_until hours
-            expiring_keys = Signing.query.filter(
+            query = Signing.query.filter(
                 Signing.expiration <= (datetime.datetime.utcnow() + datetime.timedelta(hours=time_until)),
                 Signing.active == True
-            ).all()
+            )
+
+            # if scope is not None:
+            #     if isinstance(scope, list):
+            #         query = query.filter(Signing.scope.in_(scope))
+            #     else:
+            #         query = query.filter_by(scope=scope)
+
+            # Convert scope to a list if it's a string
+            if isinstance(scope, str):
+                scope = [scope]
+
+            if scope:
+
+                for s in scope:
+                    # https://stackoverflow.com/a/44250678/13301284
+                    query = query.filter(Signing.scope.comparator.contains(s))
+
+            expiring_keys = query.all()
 
             for key in expiring_keys:
                 self.rotate_key(key.signature)
@@ -298,42 +316,49 @@ class Signatures:
             print(f"An unexpected error occurred: {e}")
             return False
 
-
         # We may need to potentially modify the return behavior to provide greater detail ... 
         # for example, a list of old keys mapped to their new keys and emails.
         return True
 
-    def rotate_key(self, signature) -> str:
-    
+    def rotate_key(self, key: str, expiration: int = 1) -> str:
         """
         Replaces an active key with a new key with the same properties, and sets the old key as inactive.
         Args:
             key (str): The signing key to be rotated.
+            expiration (int): The number of hours until the new key will expire. Defaults to 1.
         Returns:
             str: The new signing key.
         """
-
         try:
+
             Signing = self.get_model()
 
-            # retrieve the key
-            key = Signing.query.filter(Signing.signature == signature, Signing.active == True).first()
+            signing_key = Signing.query.filter_by(signature=key).first()
 
-            if key is not None:
-                # rotate the key
-                key.active = False
+            if not signing_key:
+                raise ValueError("No such key exists")
 
-                # commit the changes
-                db.session.commit()
+            # Disable old key
+            signing_key.active = False
+
+            # Generate a new key with the same properties
+            new_key = self.write_key_to_database(
+                scope=signing_key.scope, 
+                expiration=(datetime.datetime.utcnow() + datetime.timedelta(hours=expiration)),
+                timestamp=datetime.datetime.utcnow(),
+                active=True, 
+                email=signing_key.email)
+
+            self.db.session.commit()
 
         except SQLAlchemyError as e:
             # This will catch any SQLAlchemy related exceptions
-            print(f"An error occurred while rotating the key {signature}: {e}")
+            # print(f"An error occurred while rotating the key {key}: {e}")
             return False
 
         except Exception as e:
             # This will catch any other kind of unexpected exceptions
-            print(f"An unexpected error occurred: {e}")
+            # print(f"An unexpected error occurred: {e}")
             return False
 
-        return key
+        return new_key
