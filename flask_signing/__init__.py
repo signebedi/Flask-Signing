@@ -24,7 +24,7 @@ class Signatures:
 
         Args:
             app (Flask): A flask object to contain the context for database interactions. 
-            safe_mode(bool, optional): If safe_mode is enabled, we will prevent rotation of disabled or rotated keys. Defaults to True.
+            safe_mode (bool, optional): If safe_mode is enabled, we will prevent rotation of disabled or rotated keys. Defaults to True.
             byte_len (int, optional): The length of the generated signing keys. Defaults to 24.
         """
 
