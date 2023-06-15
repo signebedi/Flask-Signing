@@ -51,7 +51,7 @@ class Signatures:
             length = self.byte_len
         return secrets.token_urlsafe(length)
 
-    def write_key_to_database(self, scope:str=None, expiration:int=1, active:bool=True, email:str=None) -> str:
+    def write_key_to_database(self, scope:str=None, expiration:int=1, active:bool=True, email:str=None, previous_key:str=None) -> str:
         """
         Writes a newly generated signing key to the database.
 
@@ -63,6 +63,7 @@ class Signatures:
                 If not provided or equals 0, the expiration will be set to zero. Defaults to 1.
             active (bool, optional): The status of the signing key. Defaults to True.
             email (str, optional): The email associated with the signing key. Defaults to None.
+            previous_key (str, optional): The previous key to associate with this key, in the case of key rotation. Defaults to None.
 
         Returns:
             str: The generated and written signing key.
@@ -78,15 +79,21 @@ class Signatures:
         if isinstance(scope, str):
             scope = [scope]
 
-        new_key = Signing(
-                        signature=key, 
-                        # scope=scope.lower() if scope else "",
-                        scope=[s.lower() for s in scope] if scope else [],
-                        email=email.lower() if email else "", 
-                        active=active,
-                        expiration=(datetime.datetime.utcnow() + datetime.timedelta(hours=expiration)) if expiration else 0,
-                        timestamp=datetime.datetime.utcnow(),
-        )
+        # Here we compile the fields for the new Signing table row
+        SIGNING_FIELDS = {  'signature':key, 
+                    'scope':[s.lower() for s in scope] if scope else [],
+                    'email':email.lower() if email else "", 
+                    'active':active,
+                    'expiration':(datetime.datetime.utcnow() + datetime.timedelta(hours=expiration)) if expiration else 0,
+                    'timestamp':datetime.datetime.utcnow(),
+        }
+
+        # If we've passed a parent key, then we modify the new row with the parent ID
+        # Note: this defaults to NULL if not passed.
+        if previous_key:
+            SIGNING_FIELDS['previous_key'] = previous_key
+
+        new_key = Signing(**SIGNING_FIELDS)
 
         self.db.session.add(new_key)
         self.db.session.commit()
@@ -187,13 +194,17 @@ class Signatures:
             class Signing(self.db.Model):
                 __tablename__ = 'signing'
                 signature = self.db.Column(self.db.String(1000), primary_key=True) 
-                email = self.db.Column(self.db.String(100))
+                email = self.db.Column(self.db.String(100)) 
                 # scope = self.db.Column(self.db.String(100))
                 # scope = self.db.Column(self.db.MutableList.as_mutable(self.db.String(100)), default=[]),
                 scope = self.db.Column(self.db.JSON())
                 active = self.db.Column(self.db.Boolean)
                 timestamp = self.db.Column(self.db.DateTime, nullable=False, default=datetime.datetime.utcnow)
                 expiration = self.db.Column(self.db.DateTime, nullable=False, default=datetime.datetime.utcnow)
+                # previous_key = self.db.Column(self.db.String(1000), db.ForeignKey('signing.signature'))
+                previous_key = self.db.Column(self.db.String(1000), self.db.ForeignKey('signing.signature'), nullable=True)
+                # parent = db.relationship("Signing", remote_side=[signature]) # self referential relationship
+                children = self.db.relationship('Signing', backref=self.db.backref('parent', remote_side=[signature])) # self referential relationship
 
             self._model = Signing
 
@@ -346,7 +357,8 @@ class Signatures:
                 scope=signing_key.scope, 
                 expiration=expiration, 
                 active=True, 
-                email=signing_key.email
+                email=signing_key.email,
+                previous_key=signing_key.signature,  # Assign old key's signature to the previous_key field of new key
             )
             
             self.db.session.commit()
