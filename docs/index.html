@@ -46,12 +46,13 @@ class Signatures:
     of signing keys in the database.
     &#34;&#34;&#34;
     
-    def __init__(self, app, byte_len:int=24):
+    def __init__(self, app, safe_mode:bool=True, byte_len:int=24):
         &#34;&#34;&#34;
         Initializes a new instance of the Signatures class.
 
         Args:
             app (Flask): A flask object to contain the context for database interactions. 
+            safe_mode(bool, optional): If safe_mode is enabled, we will prevent rotation of disabled or rotated keys. Defaults to True.
             byte_len (int, optional): The length of the generated signing keys. Defaults to 24.
         &#34;&#34;&#34;
 
@@ -61,6 +62,7 @@ class Signatures:
 
         # self.db = database
         self.byte_len = byte_len
+        self.safe_mode = safe_mode
 
     def generate_key(self, length:int=None) -&gt; str:
         &#34;&#34;&#34;
@@ -112,6 +114,7 @@ class Signatures:
                     &#39;scope&#39;:[s.lower() for s in scope] if scope else [],
                     &#39;email&#39;:email.lower() if email else &#34;&#34;, 
                     &#39;active&#39;:active,
+                    &#39;rotated&#39;: False,
                     &#39;expiration&#39;:(datetime.datetime.utcnow() + datetime.timedelta(hours=expiration)) if expiration else 0,
                     &#39;timestamp&#39;:datetime.datetime.utcnow(),
         }
@@ -231,6 +234,7 @@ class Signatures:
                 expiration = self.db.Column(self.db.DateTime, nullable=False, default=datetime.datetime.utcnow)
                 # previous_key = self.db.Column(self.db.String(1000), db.ForeignKey(&#39;signing.signature&#39;))
                 previous_key = self.db.Column(self.db.String(1000), self.db.ForeignKey(&#39;signing.signature&#39;), nullable=True)
+                rotated = self.db.Column(self.db.Boolean)
                 # parent = db.relationship(&#34;Signing&#34;, remote_side=[signature]) # self referential relationship
                 children = self.db.relationship(&#39;Signing&#39;, backref=self.db.backref(&#39;parent&#39;, remote_side=[signature])) # self referential relationship
 
@@ -294,7 +298,7 @@ class Signatures:
         if not result:
             return False
 
-        return [{&#39;signature&#39;: key.signature, &#39;email&#39;: key.email, &#39;scope&#39;: key.scope, &#39;active&#39;: key.active, &#39;timestamp&#39;: key.timestamp, &#39;expiration&#39;: key.expiration, &#39;previous_key&#39;: key.previous_key} for key in result]
+        return [{&#39;signature&#39;: key.signature, &#39;email&#39;: key.email, &#39;scope&#39;: key.scope, &#39;active&#39;: key.active, &#39;timestamp&#39;: key.timestamp, &#39;expiration&#39;: key.expiration, &#39;previous_key&#39;: key.previous_key, &#39;rotated&#39;: key.rotated} for key in result]
 
     def query_all(self) -&gt; List[Dict[str, Any]]:
 
@@ -306,7 +310,7 @@ class Signatures:
             List[Dict[str, Any]]: A list of dictionaries where each dictionary contains the details of a signing key.
 
         &#34;&#34;&#34;
-        return [{&#39;signature&#39;: key.signature, &#39;email&#39;: key.email, &#39;scope&#39;: key.scope, &#39;active&#39;: key.active, &#39;timestamp&#39;: key.timestamp, &#39;expiration&#39;: key.expiration} for key in self.get_model().query.all()]
+        return [{&#39;signature&#39;: key.signature, &#39;email&#39;: key.email, &#39;scope&#39;: key.scope, &#39;active&#39;: key.active, &#39;timestamp&#39;: key.timestamp, &#39;expiration&#39;: key.expiration, &#39;previous_key&#39;: key.previous_key, &#39;rotated&#39;: key.rotated} for key in self.get_model().query.all()]
 
 
     def rotate_keys(self, time_until:int=1, scope=None) -&gt; bool:
@@ -380,8 +384,15 @@ class Signatures:
             if not signing_key:
                 raise ValueError(&#34;No such key exists&#34;)
 
+            if self.safe_mode and signing_key.rotated:
+                raise ValueError(&#34;Key has already been rotated&#34;)
+
+            if self.safe_mode and not signing_key.active:
+                raise ValueError(&#34;You cannot rotate a disabled key&#34;)
+
             # Disable old key
             signing_key.active = False
+            signing_key.rotated = True
             self.db.session.flush()
 
             # Generate a new key with the same properties
@@ -417,7 +428,7 @@ class Signatures:
 <dl>
 <dt id="flask_signing.Signatures"><code class="flex name class">
 <span>class <span class="ident">Signatures</span></span>
-<span>(</span><span>app, byte_len: int = 24)</span>
+<span>(</span><span>app, safe_mode: bool = True, byte_len: int = 24)</span>
 </code></dt>
 <dd>
 <div class="desc"><p>The Signatures class handles operations related to the creation, management, and validation
@@ -427,6 +438,7 @@ of signing keys in the database.</p>
 <dl>
 <dt><strong><code>app</code></strong> :&ensp;<code>Flask</code></dt>
 <dd>A flask object to contain the context for database interactions. </dd>
+<dt>safe_mode(bool, optional): If safe_mode is enabled, we will prevent rotation of disabled or rotated keys. Defaults to True.</dt>
 <dt><strong><code>byte_len</code></strong> :&ensp;<code>int</code>, optional</dt>
 <dd>The length of the generated signing keys. Defaults to 24.</dd>
 </dl></div>
@@ -440,12 +452,13 @@ of signing keys in the database.</p>
     of signing keys in the database.
     &#34;&#34;&#34;
     
-    def __init__(self, app, byte_len:int=24):
+    def __init__(self, app, safe_mode:bool=True, byte_len:int=24):
         &#34;&#34;&#34;
         Initializes a new instance of the Signatures class.
 
         Args:
             app (Flask): A flask object to contain the context for database interactions. 
+            safe_mode(bool, optional): If safe_mode is enabled, we will prevent rotation of disabled or rotated keys. Defaults to True.
             byte_len (int, optional): The length of the generated signing keys. Defaults to 24.
         &#34;&#34;&#34;
 
@@ -455,6 +468,7 @@ of signing keys in the database.</p>
 
         # self.db = database
         self.byte_len = byte_len
+        self.safe_mode = safe_mode
 
     def generate_key(self, length:int=None) -&gt; str:
         &#34;&#34;&#34;
@@ -506,6 +520,7 @@ of signing keys in the database.</p>
                     &#39;scope&#39;:[s.lower() for s in scope] if scope else [],
                     &#39;email&#39;:email.lower() if email else &#34;&#34;, 
                     &#39;active&#39;:active,
+                    &#39;rotated&#39;: False,
                     &#39;expiration&#39;:(datetime.datetime.utcnow() + datetime.timedelta(hours=expiration)) if expiration else 0,
                     &#39;timestamp&#39;:datetime.datetime.utcnow(),
         }
@@ -625,6 +640,7 @@ of signing keys in the database.</p>
                 expiration = self.db.Column(self.db.DateTime, nullable=False, default=datetime.datetime.utcnow)
                 # previous_key = self.db.Column(self.db.String(1000), db.ForeignKey(&#39;signing.signature&#39;))
                 previous_key = self.db.Column(self.db.String(1000), self.db.ForeignKey(&#39;signing.signature&#39;), nullable=True)
+                rotated = self.db.Column(self.db.Boolean)
                 # parent = db.relationship(&#34;Signing&#34;, remote_side=[signature]) # self referential relationship
                 children = self.db.relationship(&#39;Signing&#39;, backref=self.db.backref(&#39;parent&#39;, remote_side=[signature])) # self referential relationship
 
@@ -688,7 +704,7 @@ of signing keys in the database.</p>
         if not result:
             return False
 
-        return [{&#39;signature&#39;: key.signature, &#39;email&#39;: key.email, &#39;scope&#39;: key.scope, &#39;active&#39;: key.active, &#39;timestamp&#39;: key.timestamp, &#39;expiration&#39;: key.expiration, &#39;previous_key&#39;: key.previous_key} for key in result]
+        return [{&#39;signature&#39;: key.signature, &#39;email&#39;: key.email, &#39;scope&#39;: key.scope, &#39;active&#39;: key.active, &#39;timestamp&#39;: key.timestamp, &#39;expiration&#39;: key.expiration, &#39;previous_key&#39;: key.previous_key, &#39;rotated&#39;: key.rotated} for key in result]
 
     def query_all(self) -&gt; List[Dict[str, Any]]:
 
@@ -700,7 +716,7 @@ of signing keys in the database.</p>
             List[Dict[str, Any]]: A list of dictionaries where each dictionary contains the details of a signing key.
 
         &#34;&#34;&#34;
-        return [{&#39;signature&#39;: key.signature, &#39;email&#39;: key.email, &#39;scope&#39;: key.scope, &#39;active&#39;: key.active, &#39;timestamp&#39;: key.timestamp, &#39;expiration&#39;: key.expiration} for key in self.get_model().query.all()]
+        return [{&#39;signature&#39;: key.signature, &#39;email&#39;: key.email, &#39;scope&#39;: key.scope, &#39;active&#39;: key.active, &#39;timestamp&#39;: key.timestamp, &#39;expiration&#39;: key.expiration, &#39;previous_key&#39;: key.previous_key, &#39;rotated&#39;: key.rotated} for key in self.get_model().query.all()]
 
 
     def rotate_keys(self, time_until:int=1, scope=None) -&gt; bool:
@@ -774,8 +790,15 @@ of signing keys in the database.</p>
             if not signing_key:
                 raise ValueError(&#34;No such key exists&#34;)
 
+            if self.safe_mode and signing_key.rotated:
+                raise ValueError(&#34;Key has already been rotated&#34;)
+
+            if self.safe_mode and not signing_key.active:
+                raise ValueError(&#34;You cannot rotate a disabled key&#34;)
+
             # Disable old key
             signing_key.active = False
+            signing_key.rotated = True
             self.db.session.flush()
 
             # Generate a new key with the same properties
@@ -942,6 +965,7 @@ see <a href="https://docs.python.org/3/library/secrets.html.">https://docs.pytho
             expiration = self.db.Column(self.db.DateTime, nullable=False, default=datetime.datetime.utcnow)
             # previous_key = self.db.Column(self.db.String(1000), db.ForeignKey(&#39;signing.signature&#39;))
             previous_key = self.db.Column(self.db.String(1000), self.db.ForeignKey(&#39;signing.signature&#39;), nullable=True)
+            rotated = self.db.Column(self.db.Boolean)
             # parent = db.relationship(&#34;Signing&#34;, remote_side=[signature]) # self referential relationship
             children = self.db.relationship(&#39;Signing&#39;, backref=self.db.backref(&#39;parent&#39;, remote_side=[signature])) # self referential relationship
 
@@ -975,7 +999,7 @@ If no keys are found, it returns an empty list.</p>
         List[Dict[str, Any]]: A list of dictionaries where each dictionary contains the details of a signing key.
 
     &#34;&#34;&#34;
-    return [{&#39;signature&#39;: key.signature, &#39;email&#39;: key.email, &#39;scope&#39;: key.scope, &#39;active&#39;: key.active, &#39;timestamp&#39;: key.timestamp, &#39;expiration&#39;: key.expiration} for key in self.get_model().query.all()]</code></pre>
+    return [{&#39;signature&#39;: key.signature, &#39;email&#39;: key.email, &#39;scope&#39;: key.scope, &#39;active&#39;: key.active, &#39;timestamp&#39;: key.timestamp, &#39;expiration&#39;: key.expiration, &#39;previous_key&#39;: key.previous_key, &#39;rotated&#39;: key.rotated} for key in self.get_model().query.all()]</code></pre>
 </details>
 </dd>
 <dt id="flask_signing.Signatures.query_keys"><code class="name flex">
@@ -1061,7 +1085,7 @@ If no keys are found, it returns False.</p>
     if not result:
         return False
 
-    return [{&#39;signature&#39;: key.signature, &#39;email&#39;: key.email, &#39;scope&#39;: key.scope, &#39;active&#39;: key.active, &#39;timestamp&#39;: key.timestamp, &#39;expiration&#39;: key.expiration, &#39;previous_key&#39;: key.previous_key} for key in result]</code></pre>
+    return [{&#39;signature&#39;: key.signature, &#39;email&#39;: key.email, &#39;scope&#39;: key.scope, &#39;active&#39;: key.active, &#39;timestamp&#39;: key.timestamp, &#39;expiration&#39;: key.expiration, &#39;previous_key&#39;: key.previous_key, &#39;rotated&#39;: key.rotated} for key in result]</code></pre>
 </details>
 </dd>
 <dt id="flask_signing.Signatures.rotate_key"><code class="name flex">
@@ -1102,8 +1126,15 @@ If no keys are found, it returns False.</p>
         if not signing_key:
             raise ValueError(&#34;No such key exists&#34;)
 
+        if self.safe_mode and signing_key.rotated:
+            raise ValueError(&#34;Key has already been rotated&#34;)
+
+        if self.safe_mode and not signing_key.active:
+            raise ValueError(&#34;You cannot rotate a disabled key&#34;)
+
         # Disable old key
         signing_key.active = False
+        signing_key.rotated = True
         self.db.session.flush()
 
         # Generate a new key with the same properties
@@ -1340,6 +1371,7 @@ If not provided or equals 0, the expiration will be set to zero. Defaults to 1.<
                 &#39;scope&#39;:[s.lower() for s in scope] if scope else [],
                 &#39;email&#39;:email.lower() if email else &#34;&#34;, 
                 &#39;active&#39;:active,
+                &#39;rotated&#39;: False,
                 &#39;expiration&#39;:(datetime.datetime.utcnow() + datetime.timedelta(hours=expiration)) if expiration else 0,
                 &#39;timestamp&#39;:datetime.datetime.utcnow(),
     }
