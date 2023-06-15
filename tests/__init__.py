@@ -90,7 +90,7 @@ class TestFlaskSigning(unittest.TestCase):
         """
         with self.app.app_context():
             key1 = self.signatures.write_key_to_database(scope='test1', email='test1@example.com')
-            key2 = self.signatures.write_key_to_database(scope='test2', email='test2@example.com', active=False)
+            key2 = self.signatures.write_key_to_database(scope='test2', email='test2@example.com', active=True)
             key3 = self.signatures.rotate_key(key2)  # Generate a new key using rotate_key which assigns previous_key
 
             # Test querying by active status
@@ -106,10 +106,19 @@ class TestFlaskSigning(unittest.TestCase):
             result = self.signatures.query_keys(email='test2@example.com')
             self.assertTrue(all(record['email'] == 'test2@example.com' for record in result))
 
-            # Test querying by previous_key
+            # # Test querying by previous_key
             result = self.signatures.query_keys(previous_key=key2)
             self.assertTrue(all(record['previous_key'] == key2 for record in result))
-            
+            self.assertTrue(len(result) == 1)            
+            # if result is not False:
+            #     self.assertTrue(all(record['previous_key'] == key2 for record in result))
+            # else:
+            #     self.fail("No records found for previous_key")
+
+            # Check that the rotation does not occur if safe_mode is True and key is already rotated
+            # with self.assertRaises(ValueError):
+            #     self.signatures.rotate_key(key2)
+
             # Test querying by multiple fields
             result = self.signatures.query_keys(active=True, scope='test1', email='test1@example.com')
             self.assertEqual(len(result), 1)
@@ -137,6 +146,17 @@ class TestFlaskSigning(unittest.TestCase):
 
             # Check that the old key is now inactive
             self.assertFalse(signing_key.active)
+
+            # Check that the old key is now marked as rotated
+            self.assertTrue(signing_key.rotated)
+
+            # Check that the rotation does not occur if safe_mode is True and key is already rotated
+            # with self.assertRaises(ValueError):
+            #     self.signatures.rotate_key(key)
+
+            # Check that the new key is not marked as rotated
+            self.assertFalse(Signing.query.filter_by(signature=new_key).first().rotated)
+
 
             # Check that the new key is in the database and active
             new_signing_key = Signing.query.filter_by(signature=new_key).first()
@@ -190,6 +210,7 @@ class TestFlaskSigning(unittest.TestCase):
             new_late_expire_key = Signing.query.filter_by(previous_key=late_expire_key).first()
             # Check that the new key's previous_key is the old key
             self.assertEqual(new_late_expire_key.previous_key, late_expire_key)
+
 
 if __name__ == '__main__':
     unittest.main()
