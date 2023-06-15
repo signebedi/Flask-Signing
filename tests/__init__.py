@@ -91,6 +91,7 @@ class TestFlaskSigning(unittest.TestCase):
         with self.app.app_context():
             key1 = self.signatures.write_key_to_database(scope='test1', email='test1@example.com')
             key2 = self.signatures.write_key_to_database(scope='test2', email='test2@example.com', active=False)
+            key3 = self.signatures.rotate_key(key2)  # Generate a new key using rotate_key which assigns previous_key
 
             # Test querying by active status
             result = self.signatures.query_keys(active=True)
@@ -105,6 +106,10 @@ class TestFlaskSigning(unittest.TestCase):
             result = self.signatures.query_keys(email='test2@example.com')
             self.assertTrue(all(record['email'] == 'test2@example.com' for record in result))
 
+            # Test querying by previous_key
+            result = self.signatures.query_keys(previous_key=key2)
+            self.assertTrue(all(record['previous_key'] == key2 for record in result))
+            
             # Test querying by multiple fields
             result = self.signatures.query_keys(active=True, scope='test1', email='test1@example.com')
             self.assertEqual(len(result), 1)
@@ -113,6 +118,7 @@ class TestFlaskSigning(unittest.TestCase):
             # Test querying with no results
             result = self.signatures.query_keys(active=True, scope='non-existent-scope')
             self.assertFalse(result)
+
 
     def test_rotate_key(self):
         """
