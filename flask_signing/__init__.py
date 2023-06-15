@@ -1,11 +1,5 @@
-__name__ = "flask_signing"
-__author__ = "Sig Janoska-Bedi"
-__credits__ = ["Sig Janoska-Bedi",]
-__version__ = "0.4.1"
-__license__ = "BSD-3-Clause"
-__maintainer__ = "Sig Janoska-Bedi"
-__email__ = "signe@atreeus.com"
-
+from .__metadata__ import (__name__, __author__, __credits__, __version__, 
+                       __license__, __maintainer__, __email__)
 import datetime, secrets
 from sqlalchemy import func, literal
 from sqlalchemy.exc import SQLAlchemyError
