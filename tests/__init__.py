@@ -154,6 +154,8 @@ class TestFlaskSigning(unittest.TestCase):
             # with self.assertRaises(ValueError):
             #     self.signatures.rotate_key(key)
 
+            self.assertFalse(self.signatures.rotate_key(key))
+
             # Check that the new key is not marked as rotated
             self.assertFalse(Signing.query.filter_by(signature=new_key).first().rotated)
 
