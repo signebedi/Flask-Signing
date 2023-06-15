@@ -203,6 +203,7 @@ class Signatures:
                 expiration = self.db.Column(self.db.DateTime, nullable=False, default=datetime.datetime.utcnow)
                 # previous_key = self.db.Column(self.db.String(1000), db.ForeignKey('signing.signature'))
                 previous_key = self.db.Column(self.db.String(1000), self.db.ForeignKey('signing.signature'), nullable=True)
+                rotated = self.db.Column(self.db.Boolean, default=False)
                 # parent = db.relationship("Signing", remote_side=[signature]) # self referential relationship
                 children = self.db.relationship('Signing', backref=self.db.backref('parent', remote_side=[signature])) # self referential relationship
 
@@ -278,7 +279,7 @@ class Signatures:
             List[Dict[str, Any]]: A list of dictionaries where each dictionary contains the details of a signing key.
 
         """
-        return [{'signature': key.signature, 'email': key.email, 'scope': key.scope, 'active': key.active, 'timestamp': key.timestamp, 'expiration': key.expiration} for key in self.get_model().query.all()]
+        return [{'signature': key.signature, 'email': key.email, 'scope': key.scope, 'active': key.active, 'timestamp': key.timestamp, 'expiration': key.expiration, 'previous_key': key.previous_key} for key in self.get_model().query.all()]
 
 
     def rotate_keys(self, time_until:int=1, scope=None) -> bool:
@@ -354,6 +355,7 @@ class Signatures:
 
             # Disable old key
             signing_key.active = False
+            signing_key.rotated = True
             self.db.session.flush()
 
             # Generate a new key with the same properties
