@@ -142,8 +142,10 @@ class TestFlaskSigning(unittest.TestCase):
             self.assertEqual(signing_key.email, new_signing_key.email)
             # convert expiration to hours for comparison
             self.assertEqual((signing_key.expiration - datetime.datetime.utcnow()).seconds // 3600, 
-                             (new_signing_key.expiration - datetime.datetime.utcnow()).seconds // 3600)
+                            (new_signing_key.expiration - datetime.datetime.utcnow()).seconds // 3600)
 
+            # Check that the new key's previous_key is the old key
+            self.assertEqual(new_signing_key.previous_key, key)
 
     def test_rotate_keys(self):
         """
@@ -178,7 +180,10 @@ class TestFlaskSigning(unittest.TestCase):
             late_expire_signing_key = Signing.query.filter_by(signature=late_expire_key).first()
             self.assertFalse(late_expire_signing_key.active)
 
-
+            # Get the new key that replaced the late_expire_key
+            new_late_expire_key = Signing.query.filter_by(previous_key=late_expire_key).first()
+            # Check that the new key's previous_key is the old key
+            self.assertEqual(new_late_expire_key.previous_key, late_expire_key)
 
 if __name__ == '__main__':
     unittest.main()
