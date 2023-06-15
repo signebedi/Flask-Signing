@@ -211,9 +211,9 @@ class Signatures:
         return self._model
 
 
-    def query_keys(self, active:bool=None, scope:str=None, email:str=None) -> Union[List[Dict[str, Any]], bool]:
+    def query_keys(self, active:bool=None, scope:str=None, email:str=None, previous_key:str=None) -> Union[List[Dict[str, Any]], bool]:
         """
-        Query signing keys by active status, scope, and email.
+        Query signing keys by active status, scope, email, and previous_key.
 
         This function returns a list of signing keys that match the provided parameters.
         If no keys are found, it returns False.
@@ -222,6 +222,7 @@ class Signatures:
             active (bool, optional): The active status of the signing keys. Defaults to None.
             scope (str, optional): The scope of the signing keys. Defaults to None.
             email (str, optional): The email associated with the signing keys. Defaults to None.
+            previous_key (str, optional): The previous_key associated with the signing keys. Defaults to None.
 
         Returns:
             Union[List[Dict[str, Any]], bool]: A list of dictionaries where each dictionary contains the details of a signing key,
@@ -257,12 +258,15 @@ class Signatures:
         if email:
             query = query.filter(Signing.email == email)
 
+        if previous_key:
+            query = query.filter(Signing.previous_key == previous_key)
+
         result = query.all()
 
         if not result:
             return False
 
-        return [{'signature': key.signature, 'email': key.email, 'scope': key.scope, 'active': key.active, 'timestamp': key.timestamp, 'expiration': key.expiration} for key in result]
+        return [{'signature': key.signature, 'email': key.email, 'scope': key.scope, 'active': key.active, 'timestamp': key.timestamp, 'expiration': key.expiration, 'previous_key': key.previous_key} for key in result]
 
     def query_all(self) -> List[Dict[str, Any]]:
 
