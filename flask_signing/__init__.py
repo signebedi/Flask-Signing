@@ -1,10 +1,14 @@
 from .__metadata__ import (__name__, __author__, __credits__, __version__, 
                        __license__, __maintainer__, __email__)
 import datetime, secrets
+from functools import wraps
 from sqlalchemy import func, literal
 from sqlalchemy.exc import SQLAlchemyError
 from flask_sqlalchemy import SQLAlchemy
 from typing import Union, List, Dict, Any
+
+class RateLimitExceeded(Exception):
+    pass
 
 class Signatures:
     """
@@ -12,7 +16,7 @@ class Signatures:
     of signing keys in the database.
     """
     
-    def __init__(self, app, safe_mode:bool=True, byte_len:int=24):
+    def __init__(self, app, safe_mode:bool=True, byte_len:int=24, rate_limiting=False, rate_limiting_max_requests=10, rate_limiting_period=datetime.timedelta(minutes=1)):
         """
         Initializes a new instance of the Signatures class.
 
@@ -20,15 +24,74 @@ class Signatures:
             app (Flask): A flask object to contain the context for database interactions. 
             safe_mode (bool, optional): If safe_mode is enabled, we will prevent rotation of disabled or rotated keys. Defaults to True.
             byte_len (int, optional): The length of the generated signing keys. Defaults to 24.
+            rate_limiting (bool, optional): If rate_limiting is enabled, we will impose key-by-key rate limits. Defaults to False.
+            rate_limiting_max_requests (int, optional): Maximum allowed requests per time period.
+            rate_limiting_period (datetime.timedelta, optional): Time period for rate limiting. Defaults to 1 hour.
         """
 
         self.db = SQLAlchemy(app)
         self.Signing = self.get_model()
         self.db.create_all()  # this will create all necessary tables
 
-        # self.db = database
         self.byte_len = byte_len
+
+        # Set safe mode to prevent disabled/rotated keys from being rotated
         self.safe_mode = safe_mode
+
+        # Set rate limiting attributes
+        self.rate_limiting = rate_limiting
+        self.rate_limiting_max_requests = rate_limiting_max_requests
+        self.rate_limiting_period = rate_limiting_period
+
+    class request_limiter:
+        def __init__(self, func):
+            self.func = func
+
+        def __get__(self, instance, owner):
+            @wraps(self.func)
+            def wrapper(signature, *args, **kwargs):
+
+                # If rate limiting has not been enabled, then we always return True
+                if not instance.rate_limiting:
+                    return True
+
+                Signing = instance.get_model()
+
+                signing_key = Signing.query.filter_by(signature=signature).first()
+
+                # If the key does not exist
+                if not signing_key:
+                    return False
+
+                # Reset request_count if period has passed since last_request_time
+                if datetime.datetime.utcnow() - signing_key.last_request_time >= instance.rate_limiting_period:
+                    signing_key.request_count = 0
+                    signing_key.last_request_time = datetime.datetime.utcnow()
+
+                # Check if request_count exceeds max_requests
+                if signing_key.request_count >= instance.rate_limiting_max_requests:
+                    raise RateLimitExceeded("Too many requests. Please try again later.")
+
+                # If limit not exceeded, increment request_count and update last_request_time
+                signing_key.request_count += 1
+                signing_key.last_request_time = datetime.datetime.utcnow()
+
+                instance.db.session.commit()
+
+                return self.func(instance, signature, *args, **kwargs)
+            return wrapper
+
+    @request_limiter
+    def validate_request(self, signature, scope):
+        try:
+            valid = self.verify_signature(signature, scope)
+        except RateLimitExceeded as e:
+            print(e)  # Or handle the exception in some other way
+            return False
+
+        return valid
+
+
 
     def generate_key(self, length:int=None) -> str:
         """
@@ -198,6 +261,8 @@ class Signatures:
                 active = self.db.Column(self.db.Boolean)
                 timestamp = self.db.Column(self.db.DateTime, nullable=False, default=datetime.datetime.utcnow)
                 expiration = self.db.Column(self.db.DateTime, nullable=False, default=datetime.datetime.utcnow)
+                request_count = self.db.Column(self.db.Integer, default=0)
+                last_request_time = self.db.Column(self.db.DateTime, default=datetime.datetime.utcnow)
                 # previous_key = self.db.Column(self.db.String(1000), db.ForeignKey('signing.signature'))
                 previous_key = self.db.Column(self.db.String(1000), self.db.ForeignKey('signing.signature'), nullable=True)
                 rotated = self.db.Column(self.db.Boolean)
