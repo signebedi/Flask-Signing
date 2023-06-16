@@ -69,20 +69,20 @@ class TestFlaskSigning(unittest.TestCase):
             self.signatures.expire_key(key)
             self.assertFalse(Signing.query.filter_by(signature=key).first().active)
 
-    def test_verify_signature(self):
+    def test_verify_key(self):
         """
         Test if a signature can be successfully verified.
         """
         with self.app.app_context():
             key = self.signatures.write_key_to_database(scope='test')
-            self.assertTrue(self.signatures.verify_signature(signature=key, scope='test'))
+            self.assertTrue(self.signatures.verify_key(signature=key, scope='test'))
 
             # Test expired key
             expired_key = self.signatures.write_key_to_database(scope='test', expiration=-1)
-            self.assertFalse(self.signatures.verify_signature(signature=expired_key, scope='test'))
+            self.assertFalse(self.signatures.verify_key(signature=expired_key, scope='test'))
 
             # Test non-existent key
-            self.assertFalse(self.signatures.verify_signature(signature='non-existent-key', scope='test'))
+            self.assertFalse(self.signatures.verify_key(signature='non-existent-key', scope='test'))
 
     def test_query_keys(self):
         """
@@ -230,20 +230,20 @@ class TestFlaskSigning(unittest.TestCase):
             signature = self.signatures.write_key_to_database(scope=scope, active=True)
 
             # Validate the key once, should return True
-            self.assertTrue(self.signatures.validate_request(signature, scope))
+            self.assertTrue(self.signatures.verify_key(signature, scope))
 
             # Validate the key twice, should return True
-            self.assertTrue(self.signatures.validate_request(signature, scope))
+            self.assertTrue(self.signatures.verify_key(signature, scope))
 
             # Now we expect a RateLimitExceeded exception because we are exceeding the rate limit
             with self.assertRaises(RateLimitExceeded):
-                self.assertTrue(self.signatures.validate_request(signature, scope))
+                self.assertTrue(self.signatures.verify_key(signature, scope))
 
             # Wait for the rate limit period to pass
             time.sleep(2)
 
             # Validate the key again, should return True
-            self.assertTrue(self.signatures.validate_request(signature, scope))
+            self.assertTrue(self.signatures.verify_key(signature, scope))
 
 
 if __name__ == '__main__':
