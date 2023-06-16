@@ -36,6 +36,15 @@ from flask_sqlalchemy import SQLAlchemy
 from typing import Union, List, Dict, Any
 
 class RateLimitExceeded(Exception):
+    &#34;&#34;&#34;
+    An exception that is raised when the request count for a specific signature 
+    exceeds the maximum allowed requests within a specified time period in the 
+    Signatures class.
+
+    This exception is used to signal that the rate limit has been exceeded, so the 
+    calling code can catch this exception and handle it appropriately - for example,
+    by sending an HTTP 429 Too Many Requests response to a client.
+    &#34;&#34;&#34;
     pass
 
 class Signatures:
@@ -72,6 +81,26 @@ class Signatures:
         self.rate_limiting_period = rate_limiting_period
 
     class request_limiter:
+        &#34;&#34;&#34;
+        A descriptor class that wraps a function with rate limiting logic. This descriptor is meant to 
+        be used as a decorator for methods in the Signatures class.
+
+        If rate limiting is enabled in the Signatures instance, this decorator checks the request count 
+        for the provided signature and raises a `RateLimitExceeded` exception if the count exceeds 
+        the max requests allowed in a set time period. 
+
+        If the time period has passed since the last request, it resets the request count. If the request 
+        count is within limits, it increments the request count and updates the time of the last request.
+
+        If rate limiting is not enabled, the descriptor simply calls the original function.
+
+        Args:
+            func (Callable): The function to wrap with rate limiting logic.
+
+        Returns:
+            wrapper (Callable): The wrapped function which now includes rate limiting logic.
+        &#34;&#34;&#34;
+
         def __init__(self, func):
             self.func = func
 
@@ -111,6 +140,28 @@ class Signatures:
 
     @request_limiter
     def validate_request(self, signature, scope):
+        &#34;&#34;&#34;
+        Validates a request by verifying the given signing key against a specific scope.
+        
+        This function wraps the `verify_signature` function with rate limiting support. 
+        If rate limiting is enabled, it checks whether the request count for the signature 
+        has exceeded the maximum allowed requests within the specified time period.
+        
+        If the rate limit is exceeded, it raises a `RateLimitExceeded` exception and returns False.
+        If the rate limit is not exceeded, it calls the `verify_signature` function to verify the key.
+        
+        Args:
+            signature (str): The signing key to be verified.
+            scope (str): The scope against which the signing key will be validated.
+
+        Returns:
+            bool: True if the signing key is valid and hasn&#39;t exceeded rate limit, False otherwise.
+
+        Raises:
+            RateLimitExceeded: If the number of requests with this signing key exceeds 
+            the maximum allowed within the specified time period.
+        &#34;&#34;&#34;
+
         try:
             valid = self.verify_signature(signature, scope)
         except RateLimitExceeded as e:
@@ -490,12 +541,26 @@ class Signatures:
 <span>(</span><span>*args, **kwargs)</span>
 </code></dt>
 <dd>
-<div class="desc"><p>Common base class for all non-exit exceptions.</p></div>
+<div class="desc"><p>An exception that is raised when the request count for a specific signature
+exceeds the maximum allowed requests within a specified time period in the
+Signatures class.</p>
+<p>This exception is used to signal that the rate limit has been exceeded, so the
+calling code can catch this exception and handle it appropriately - for example,
+by sending an HTTP 429 Too Many Requests response to a client.</p></div>
 <details class="source">
 <summary>
 <span>Expand source code</span>
 </summary>
 <pre><code class="python">class RateLimitExceeded(Exception):
+    &#34;&#34;&#34;
+    An exception that is raised when the request count for a specific signature 
+    exceeds the maximum allowed requests within a specified time period in the 
+    Signatures class.
+
+    This exception is used to signal that the rate limit has been exceeded, so the 
+    calling code can catch this exception and handle it appropriately - for example,
+    by sending an HTTP 429 Too Many Requests response to a client.
+    &#34;&#34;&#34;
     pass</code></pre>
 </details>
 <h3>Ancestors</h3>
@@ -565,6 +630,26 @@ of signing keys in the database.</p>
         self.rate_limiting_period = rate_limiting_period
 
     class request_limiter:
+        &#34;&#34;&#34;
+        A descriptor class that wraps a function with rate limiting logic. This descriptor is meant to 
+        be used as a decorator for methods in the Signatures class.
+
+        If rate limiting is enabled in the Signatures instance, this decorator checks the request count 
+        for the provided signature and raises a `RateLimitExceeded` exception if the count exceeds 
+        the max requests allowed in a set time period. 
+
+        If the time period has passed since the last request, it resets the request count. If the request 
+        count is within limits, it increments the request count and updates the time of the last request.
+
+        If rate limiting is not enabled, the descriptor simply calls the original function.
+
+        Args:
+            func (Callable): The function to wrap with rate limiting logic.
+
+        Returns:
+            wrapper (Callable): The wrapped function which now includes rate limiting logic.
+        &#34;&#34;&#34;
+
         def __init__(self, func):
             self.func = func
 
@@ -604,6 +689,28 @@ of signing keys in the database.</p>
 
     @request_limiter
     def validate_request(self, signature, scope):
+        &#34;&#34;&#34;
+        Validates a request by verifying the given signing key against a specific scope.
+        
+        This function wraps the `verify_signature` function with rate limiting support. 
+        If rate limiting is enabled, it checks whether the request count for the signature 
+        has exceeded the maximum allowed requests within the specified time period.
+        
+        If the rate limit is exceeded, it raises a `RateLimitExceeded` exception and returns False.
+        If the rate limit is not exceeded, it calls the `verify_signature` function to verify the key.
+        
+        Args:
+            signature (str): The signing key to be verified.
+            scope (str): The scope against which the signing key will be validated.
+
+        Returns:
+            bool: True if the signing key is valid and hasn&#39;t exceeded rate limit, False otherwise.
+
+        Raises:
+            RateLimitExceeded: If the number of requests with this signing key exceeds 
+            the maximum allowed within the specified time period.
+        &#34;&#34;&#34;
+
         try:
             valid = self.verify_signature(signature, scope)
         except RateLimitExceeded as e:
@@ -972,7 +1079,21 @@ of signing keys in the database.</p>
 <dl>
 <dt id="flask_signing.Signatures.request_limiter"><code class="name">var <span class="ident">request_limiter</span></code></dt>
 <dd>
-<div class="desc"></div>
+<div class="desc"><p>A descriptor class that wraps a function with rate limiting logic. This descriptor is meant to
+be used as a decorator for methods in the Signatures class.</p>
+<p>If rate limiting is enabled in the Signatures instance, this decorator checks the request count
+for the provided signature and raises a <code><a title="flask_signing.RateLimitExceeded" href="#flask_signing.RateLimitExceeded">RateLimitExceeded</a></code> exception if the count exceeds
+the max requests allowed in a set time period. </p>
+<p>If the time period has passed since the last request, it resets the request count. If the request
+count is within limits, it increments the request count and updates the time of the last request.</p>
+<p>If rate limiting is not enabled, the descriptor simply calls the original function.</p>
+<h2 id="args">Args</h2>
+<dl>
+<dt><strong><code>func</code></strong> :&ensp;<code>Callable</code></dt>
+<dd>The function to wrap with rate limiting logic.</dd>
+</dl>
+<h2 id="returns">Returns</h2>
+<p>wrapper (Callable): The wrapped function which now includes rate limiting logic.</p></div>
 <details class="source">
 <summary>
 <span>Expand source code</span>
@@ -1433,13 +1554,58 @@ This is written with the background processes in mind. This can be wrapped in a 
 <span>def <span class="ident">validate_request</span></span>(<span>self, signature, scope)</span>
 </code></dt>
 <dd>
-<div class="desc"></div>
+<div class="desc"><p>Validates a request by verifying the given signing key against a specific scope.</p>
+<p>This function wraps the <code>verify_signature</code> function with rate limiting support.
+If rate limiting is enabled, it checks whether the request count for the signature
+has exceeded the maximum allowed requests within the specified time period.</p>
+<p>If the rate limit is exceeded, it raises a <code><a title="flask_signing.RateLimitExceeded" href="#flask_signing.RateLimitExceeded">RateLimitExceeded</a></code> exception and returns False.
+If the rate limit is not exceeded, it calls the <code>verify_signature</code> function to verify the key.</p>
+<h2 id="args">Args</h2>
+<dl>
+<dt><strong><code>signature</code></strong> :&ensp;<code>str</code></dt>
+<dd>The signing key to be verified.</dd>
+<dt><strong><code>scope</code></strong> :&ensp;<code>str</code></dt>
+<dd>The scope against which the signing key will be validated.</dd>
+</dl>
+<h2 id="returns">Returns</h2>
+<dl>
+<dt><code>bool</code></dt>
+<dd>True if the signing key is valid and hasn't exceeded rate limit, False otherwise.</dd>
+</dl>
+<h2 id="raises">Raises</h2>
+<dl>
+<dt><code><a title="flask_signing.RateLimitExceeded" href="#flask_signing.RateLimitExceeded">RateLimitExceeded</a></code></dt>
+<dd>If the number of requests with this signing key exceeds </dd>
+</dl>
+<p>the maximum allowed within the specified time period.</p></div>
 <details class="source">
 <summary>
 <span>Expand source code</span>
 </summary>
 <pre><code class="python">@request_limiter
 def validate_request(self, signature, scope):
+    &#34;&#34;&#34;
+    Validates a request by verifying the given signing key against a specific scope.
+    
+    This function wraps the `verify_signature` function with rate limiting support. 
+    If rate limiting is enabled, it checks whether the request count for the signature 
+    has exceeded the maximum allowed requests within the specified time period.
+    
+    If the rate limit is exceeded, it raises a `RateLimitExceeded` exception and returns False.
+    If the rate limit is not exceeded, it calls the `verify_signature` function to verify the key.
+    
+    Args:
+        signature (str): The signing key to be verified.
+        scope (str): The scope against which the signing key will be validated.
+
+    Returns:
+        bool: True if the signing key is valid and hasn&#39;t exceeded rate limit, False otherwise.
+
+    Raises:
+        RateLimitExceeded: If the number of requests with this signing key exceeds 
+        the maximum allowed within the specified time period.
+    &#34;&#34;&#34;
+
     try:
         valid = self.verify_signature(signature, scope)
     except RateLimitExceeded as e:
