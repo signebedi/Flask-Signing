@@ -110,7 +110,7 @@ class Signatures:
 
                 # If rate limiting has not been enabled, then we always return True
                 if not instance.rate_limiting:
-                    return True
+                    return self.func(instance, signature, *args, **kwargs)
 
                 Signing = instance.get_model()
 
@@ -137,40 +137,6 @@ class Signatures:
 
                 return self.func(instance, signature, *args, **kwargs)
             return wrapper
-
-    @request_limiter
-    def validate_request(self, signature, scope):
-        &#34;&#34;&#34;
-        Validates a request by verifying the given signing key against a specific scope.
-        
-        This function wraps the `verify_signature` function with rate limiting support. 
-        If rate limiting is enabled, it checks whether the request count for the signature 
-        has exceeded the maximum allowed requests within the specified time period.
-        
-        If the rate limit is exceeded, it raises a `RateLimitExceeded` exception and returns False.
-        If the rate limit is not exceeded, it calls the `verify_signature` function to verify the key.
-        
-        Args:
-            signature (str): The signing key to be verified.
-            scope (str): The scope against which the signing key will be validated.
-
-        Returns:
-            bool: True if the signing key is valid and hasn&#39;t exceeded rate limit, False otherwise.
-
-        Raises:
-            RateLimitExceeded: If the number of requests with this signing key exceeds 
-            the maximum allowed within the specified time period.
-        &#34;&#34;&#34;
-
-        try:
-            valid = self.verify_signature(signature, scope)
-        except RateLimitExceeded as e:
-            print(e)  # Or handle the exception in some other way
-            return False
-
-        return valid
-
-
 
     def generate_key(self, length:int=None) -&gt; str:
         &#34;&#34;&#34;
@@ -264,10 +230,44 @@ class Signatures:
         signing_key.active = False
         self.db.session.commit()
         return True
+    
 
-    def verify_signature(self, signature, scope):
+    @request_limiter
+    def verify_key(self, signature, scope):
         &#34;&#34;&#34;
-        Verifies the validity of a given signing key against a specific scope.
+        Validates a request by verifying the given signing key against a specific scope.
+        
+        This function wraps the `check_key` function and adds rate limiting support. 
+        If rate limiting is enabled, it checks whether the request count for the signature 
+        has exceeded the maximum allowed requests within the specified time period.
+        
+        If the rate limit is exceeded, it raises a `RateLimitExceeded` exception and returns False.
+        If the rate limit is not exceeded, or is not enabled, this calls the `check_key` function 
+        to verify the key.
+        
+        Args:
+            signature (str): The signing key to be verified.
+            scope (str): The scope against which the signing key will be validated.
+
+        Returns:
+            bool: True if the signing key is valid and hasn&#39;t exceeded rate limit, False otherwise.
+
+        Raises:
+            RateLimitExceeded: If the number of requests with this signing key exceeds 
+            the maximum allowed within the specified time period.
+        &#34;&#34;&#34;
+
+        try:
+            valid = self.check_key(signature, scope)
+        except RateLimitExceeded as e:
+            print(e)  # Or handle the exception in some other way
+            return False
+
+        return valid
+
+    def check_key(self, signature, scope):
+        &#34;&#34;&#34;
+        Checks the validity of a given signing key against a specific scope.
 
         This function checks if the signing key exists, if it is active, if it has not expired,
         and if its scope matches the provided scope. If all these conditions are met, the function
@@ -659,7 +659,7 @@ of signing keys in the database.</p>
 
                 # If rate limiting has not been enabled, then we always return True
                 if not instance.rate_limiting:
-                    return True
+                    return self.func(instance, signature, *args, **kwargs)
 
                 Signing = instance.get_model()
 
@@ -686,40 +686,6 @@ of signing keys in the database.</p>
 
                 return self.func(instance, signature, *args, **kwargs)
             return wrapper
-
-    @request_limiter
-    def validate_request(self, signature, scope):
-        &#34;&#34;&#34;
-        Validates a request by verifying the given signing key against a specific scope.
-        
-        This function wraps the `verify_signature` function with rate limiting support. 
-        If rate limiting is enabled, it checks whether the request count for the signature 
-        has exceeded the maximum allowed requests within the specified time period.
-        
-        If the rate limit is exceeded, it raises a `RateLimitExceeded` exception and returns False.
-        If the rate limit is not exceeded, it calls the `verify_signature` function to verify the key.
-        
-        Args:
-            signature (str): The signing key to be verified.
-            scope (str): The scope against which the signing key will be validated.
-
-        Returns:
-            bool: True if the signing key is valid and hasn&#39;t exceeded rate limit, False otherwise.
-
-        Raises:
-            RateLimitExceeded: If the number of requests with this signing key exceeds 
-            the maximum allowed within the specified time period.
-        &#34;&#34;&#34;
-
-        try:
-            valid = self.verify_signature(signature, scope)
-        except RateLimitExceeded as e:
-            print(e)  # Or handle the exception in some other way
-            return False
-
-        return valid
-
-
 
     def generate_key(self, length:int=None) -&gt; str:
         &#34;&#34;&#34;
@@ -813,10 +779,44 @@ of signing keys in the database.</p>
         signing_key.active = False
         self.db.session.commit()
         return True
+    
 
-    def verify_signature(self, signature, scope):
+    @request_limiter
+    def verify_key(self, signature, scope):
         &#34;&#34;&#34;
-        Verifies the validity of a given signing key against a specific scope.
+        Validates a request by verifying the given signing key against a specific scope.
+        
+        This function wraps the `check_key` function and adds rate limiting support. 
+        If rate limiting is enabled, it checks whether the request count for the signature 
+        has exceeded the maximum allowed requests within the specified time period.
+        
+        If the rate limit is exceeded, it raises a `RateLimitExceeded` exception and returns False.
+        If the rate limit is not exceeded, or is not enabled, this calls the `check_key` function 
+        to verify the key.
+        
+        Args:
+            signature (str): The signing key to be verified.
+            scope (str): The scope against which the signing key will be validated.
+
+        Returns:
+            bool: True if the signing key is valid and hasn&#39;t exceeded rate limit, False otherwise.
+
+        Raises:
+            RateLimitExceeded: If the number of requests with this signing key exceeds 
+            the maximum allowed within the specified time period.
+        &#34;&#34;&#34;
+
+        try:
+            valid = self.check_key(signature, scope)
+        except RateLimitExceeded as e:
+            print(e)  # Or handle the exception in some other way
+            return False
+
+        return valid
+
+    def check_key(self, signature, scope):
+        &#34;&#34;&#34;
+        Checks the validity of a given signing key against a specific scope.
 
         This function checks if the signing key exists, if it is active, if it has not expired,
         and if its scope matches the provided scope. If all these conditions are met, the function
@@ -1104,7 +1104,7 @@ count is within limits, it increments the request count and updates the time of 
 
         # If rate limiting has not been enabled, then we always return True
         if not instance.rate_limiting:
-            return True
+            return self.func(instance, signature, *args, **kwargs)
 
         Signing = instance.get_model()
 
@@ -1136,6 +1136,79 @@ count is within limits, it increments the request count and updates the time of 
 </dl>
 <h3>Methods</h3>
 <dl>
+<dt id="flask_signing.Signatures.check_key"><code class="name flex">
+<span>def <span class="ident">check_key</span></span>(<span>self, signature, scope)</span>
+</code></dt>
+<dd>
+<div class="desc"><p>Checks the validity of a given signing key against a specific scope.</p>
+<p>This function checks if the signing key exists, if it is active, if it has not expired,
+and if its scope matches the provided scope. If all these conditions are met, the function
+returns True, otherwise, it returns False.</p>
+<h2 id="args">Args</h2>
+<dl>
+<dt><strong><code>signature</code></strong> :&ensp;<code>str</code></dt>
+<dd>The signing key to be verified.</dd>
+<dt><strong><code>scope</code></strong> :&ensp;<code>str</code></dt>
+<dd>The scope against which the signing key will be validated.</dd>
+</dl>
+<h2 id="returns">Returns</h2>
+<dl>
+<dt><code>bool</code></dt>
+<dd>True if the signing key is valid and False otherwise.</dd>
+</dl></div>
+<details class="source">
+<summary>
+<span>Expand source code</span>
+</summary>
+<pre><code class="python">def check_key(self, signature, scope):
+    &#34;&#34;&#34;
+    Checks the validity of a given signing key against a specific scope.
+
+    This function checks if the signing key exists, if it is active, if it has not expired,
+    and if its scope matches the provided scope. If all these conditions are met, the function
+    returns True, otherwise, it returns False.
+
+    Args:
+        signature (str): The signing key to be verified.
+        scope (str): The scope against which the signing key will be validated.
+
+    Returns:
+        bool: True if the signing key is valid and False otherwise.
+    &#34;&#34;&#34;
+
+    Signing = self.get_model()
+
+
+    signing_key = Signing.query.filter_by(signature=signature).first()
+
+    # if the key doesn&#39;t exist
+    if not signing_key:
+        return False
+
+    # if the signing key&#39;s expiration time has passed
+    if signing_key.expiration &lt; datetime.datetime.utcnow():
+        self.expire_key(signature)
+        return False
+
+    # if the signing key is set to inactive
+    if not signing_key.active:
+        return False
+
+    # Convert scope to a list if it&#39;s a string
+    if isinstance(scope, str):
+        scope = [scope]
+
+    # if the signing key&#39;s scope doesn&#39;t match any of the required scopes
+    if not set(scope).intersection(set(signing_key.scope)):
+        return False
+
+    # # if the signing key&#39;s scope doesn&#39;t match the required scope
+    # if signing_key.scope != scope:
+    #     return False
+
+    return True</code></pre>
+</details>
+</dd>
 <dt id="flask_signing.Signatures.expire_key"><code class="name flex">
 <span>def <span class="ident">expire_key</span></span>(<span>self, key)</span>
 </code></dt>
@@ -1550,16 +1623,17 @@ This is written with the background processes in mind. This can be wrapped in a 
     return True</code></pre>
 </details>
 </dd>
-<dt id="flask_signing.Signatures.validate_request"><code class="name flex">
-<span>def <span class="ident">validate_request</span></span>(<span>self, signature, scope)</span>
+<dt id="flask_signing.Signatures.verify_key"><code class="name flex">
+<span>def <span class="ident">verify_key</span></span>(<span>self, signature, scope)</span>
 </code></dt>
 <dd>
 <div class="desc"><p>Validates a request by verifying the given signing key against a specific scope.</p>
-<p>This function wraps the <code>verify_signature</code> function with rate limiting support.
+<p>This function wraps the <code>check_key</code> function and adds rate limiting support.
 If rate limiting is enabled, it checks whether the request count for the signature
 has exceeded the maximum allowed requests within the specified time period.</p>
 <p>If the rate limit is exceeded, it raises a <code><a title="flask_signing.RateLimitExceeded" href="#flask_signing.RateLimitExceeded">RateLimitExceeded</a></code> exception and returns False.
-If the rate limit is not exceeded, it calls the <code>verify_signature</code> function to verify the key.</p>
+If the rate limit is not exceeded, or is not enabled, this calls the <code>check_key</code> function
+to verify the key.</p>
 <h2 id="args">Args</h2>
 <dl>
 <dt><strong><code>signature</code></strong> :&ensp;<code>str</code></dt>
@@ -1583,16 +1657,17 @@ If the rate limit is not exceeded, it calls the <code>verify_signature</code> fu
 <span>Expand source code</span>
 </summary>
 <pre><code class="python">@request_limiter
-def validate_request(self, signature, scope):
+def verify_key(self, signature, scope):
     &#34;&#34;&#34;
     Validates a request by verifying the given signing key against a specific scope.
     
-    This function wraps the `verify_signature` function with rate limiting support. 
+    This function wraps the `check_key` function and adds rate limiting support. 
     If rate limiting is enabled, it checks whether the request count for the signature 
     has exceeded the maximum allowed requests within the specified time period.
     
     If the rate limit is exceeded, it raises a `RateLimitExceeded` exception and returns False.
-    If the rate limit is not exceeded, it calls the `verify_signature` function to verify the key.
+    If the rate limit is not exceeded, or is not enabled, this calls the `check_key` function 
+    to verify the key.
     
     Args:
         signature (str): The signing key to be verified.
@@ -1607,85 +1682,12 @@ def validate_request(self, signature, scope):
     &#34;&#34;&#34;
 
     try:
-        valid = self.verify_signature(signature, scope)
+        valid = self.check_key(signature, scope)
     except RateLimitExceeded as e:
         print(e)  # Or handle the exception in some other way
         return False
 
     return valid</code></pre>
-</details>
-</dd>
-<dt id="flask_signing.Signatures.verify_signature"><code class="name flex">
-<span>def <span class="ident">verify_signature</span></span>(<span>self, signature, scope)</span>
-</code></dt>
-<dd>
-<div class="desc"><p>Verifies the validity of a given signing key against a specific scope.</p>
-<p>This function checks if the signing key exists, if it is active, if it has not expired,
-and if its scope matches the provided scope. If all these conditions are met, the function
-returns True, otherwise, it returns False.</p>
-<h2 id="args">Args</h2>
-<dl>
-<dt><strong><code>signature</code></strong> :&ensp;<code>str</code></dt>
-<dd>The signing key to be verified.</dd>
-<dt><strong><code>scope</code></strong> :&ensp;<code>str</code></dt>
-<dd>The scope against which the signing key will be validated.</dd>
-</dl>
-<h2 id="returns">Returns</h2>
-<dl>
-<dt><code>bool</code></dt>
-<dd>True if the signing key is valid and False otherwise.</dd>
-</dl></div>
-<details class="source">
-<summary>
-<span>Expand source code</span>
-</summary>
-<pre><code class="python">def verify_signature(self, signature, scope):
-    &#34;&#34;&#34;
-    Verifies the validity of a given signing key against a specific scope.
-
-    This function checks if the signing key exists, if it is active, if it has not expired,
-    and if its scope matches the provided scope. If all these conditions are met, the function
-    returns True, otherwise, it returns False.
-
-    Args:
-        signature (str): The signing key to be verified.
-        scope (str): The scope against which the signing key will be validated.
-
-    Returns:
-        bool: True if the signing key is valid and False otherwise.
-    &#34;&#34;&#34;
-
-    Signing = self.get_model()
-
-
-    signing_key = Signing.query.filter_by(signature=signature).first()
-
-    # if the key doesn&#39;t exist
-    if not signing_key:
-        return False
-
-    # if the signing key&#39;s expiration time has passed
-    if signing_key.expiration &lt; datetime.datetime.utcnow():
-        self.expire_key(signature)
-        return False
-
-    # if the signing key is set to inactive
-    if not signing_key.active:
-        return False
-
-    # Convert scope to a list if it&#39;s a string
-    if isinstance(scope, str):
-        scope = [scope]
-
-    # if the signing key&#39;s scope doesn&#39;t match any of the required scopes
-    if not set(scope).intersection(set(signing_key.scope)):
-        return False
-
-    # # if the signing key&#39;s scope doesn&#39;t match the required scope
-    # if signing_key.scope != scope:
-    #     return False
-
-    return True</code></pre>
 </details>
 </dd>
 <dt id="flask_signing.Signatures.write_key_to_database"><code class="name flex">
@@ -1787,6 +1789,7 @@ If not provided or equals 0, the expiration will be set to zero. Defaults to 1.<
 <li>
 <h4><code><a title="flask_signing.Signatures" href="#flask_signing.Signatures">Signatures</a></code></h4>
 <ul class="">
+<li><code><a title="flask_signing.Signatures.check_key" href="#flask_signing.Signatures.check_key">check_key</a></code></li>
 <li><code><a title="flask_signing.Signatures.expire_key" href="#flask_signing.Signatures.expire_key">expire_key</a></code></li>
 <li><code><a title="flask_signing.Signatures.generate_key" href="#flask_signing.Signatures.generate_key">generate_key</a></code></li>
 <li><code><a title="flask_signing.Signatures.get_model" href="#flask_signing.Signatures.get_model">get_model</a></code></li>
@@ -1795,8 +1798,7 @@ If not provided or equals 0, the expiration will be set to zero. Defaults to 1.<
 <li><code><a title="flask_signing.Signatures.request_limiter" href="#flask_signing.Signatures.request_limiter">request_limiter</a></code></li>
 <li><code><a title="flask_signing.Signatures.rotate_key" href="#flask_signing.Signatures.rotate_key">rotate_key</a></code></li>
 <li><code><a title="flask_signing.Signatures.rotate_keys" href="#flask_signing.Signatures.rotate_keys">rotate_keys</a></code></li>
-<li><code><a title="flask_signing.Signatures.validate_request" href="#flask_signing.Signatures.validate_request">validate_request</a></code></li>
-<li><code><a title="flask_signing.Signatures.verify_signature" href="#flask_signing.Signatures.verify_signature">verify_signature</a></code></li>
+<li><code><a title="flask_signing.Signatures.verify_key" href="#flask_signing.Signatures.verify_key">verify_key</a></code></li>
 <li><code><a title="flask_signing.Signatures.write_key_to_database" href="#flask_signing.Signatures.write_key_to_database">write_key_to_database</a></code></li>
 </ul>
 </li>
