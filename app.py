@@ -17,7 +17,7 @@ def sign():
 
 @app.route('/verify/<key>')
 def verify(key):
-    valid = signatures.validate_request(signature=key, scope='test')
+    valid = signatures.verify_key(signature, scope)(signature=key, scope='test')
     return f'Key valid: {valid}'
 
 @app.route('/expire/<key>')
