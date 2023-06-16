@@ -7,7 +7,7 @@ app.config['SQLALCHEMY_DATABASE_URI'] = 'sqlite://'  # Use your actual database 
 app.secret_key = "Your_Key_Here"
 
 with app.app_context():
-    signatures = Signatures(app, byte_len=24)
+    signatures = Signatures(app, byte_len=24, rate_limiting=True)
 
 
 @app.route('/sign')
@@ -17,7 +17,7 @@ def sign():
 
 @app.route('/verify/<key>')
 def verify(key):
-    valid = signatures.verify_signature(signature=key, scope='test')
+    valid = signatures.validate_request(signature=key, scope='test')
     return f'Key valid: {valid}'
 
 @app.route('/expire/<key>')
