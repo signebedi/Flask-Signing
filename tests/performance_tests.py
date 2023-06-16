@@ -1,7 +1,12 @@
 # tests/performance_tests.py
 
+import cProfile
+import pstats
 import logging
 import timeit
+from io import StringIO
+
+# Flask-specific requirements
 from flask import Flask
 from flask_sqlalchemy import SQLAlchemy
 from sqlalchemy.orm import Session
@@ -31,6 +36,18 @@ with app.app_context():
     signatures = Signatures(app, byte_len=24, rate_limiting=True)
 
 session = Session()
+
+# Profiling helper function
+def profile_function(func, name, *args, **kwargs):
+    profiler = cProfile.Profile()
+    profiler.enable()
+    func(*args, **kwargs)
+    profiler.disable()
+    s = StringIO()
+    sortby = 'cumulative'
+    ps = pstats.Stats(profiler, stream=s).sort_stats(sortby)
+    ps.print_stats()
+    logger.info(f'Profiling of {name}:\n{s.getvalue()}')
 
 def test_write_key_to_database_performance():
     with app.app_context():
@@ -122,6 +139,63 @@ def test_rotate_keys_performance():
         elapsed_time = end_time - start_time
         logger.info(f'Performance of rotate_keys: {elapsed_time} seconds')
 
+# Here we add the cProfile tests
+
+def profile_write_key_to_database_performance():
+    with app.app_context():
+        profile_function(signatures.write_key_to_database, 'write_key_to_database', scope='test', expiration=1, active=True, email='test@example.com', previous_key=None)
+
+def profile_check_key_performance():
+    with app.app_context():
+        key = signatures.write_key_to_database(scope='test', expiration=1, active=True, email='test@example.com', previous_key=None)
+        profile_function(signatures.check_key, 'check_key', key, 'test')
+
+def profile_verify_key_performance():
+    with app.app_context():
+        signatures.rate_limiting = False  # Disable rate limiting for performance test
+
+        key = signatures.write_key_to_database(scope='test', expiration=1, active=True, email='test@example.com', previous_key=None)
+        profile_function(signatures.verify_key, 'verify_key', key, 'test')
+
+        signatures.rate_limiting = True  # Re-enable rate limiting after test
+
+def profile_expire_key_performance():
+    with app.app_context():
+        key = signatures.write_key_to_database(scope='test', expiration=1, active=True, email='test@example.com', previous_key=None)
+        profile_function(signatures.expire_key, 'expire_key', key)
+
+def profile_query_keys_performance():
+    with app.app_context():
+        # Prepare the data
+        for i in range(10):
+            signatures.write_key_to_database(scope='test', expiration=1, active=True, email='test'+str(i)+'@example.com', previous_key=None)
+
+        # Run the test
+        profile_function(signatures.query_keys, 'query_keys', active=True, scope='test', email='test5@example.com')
+
+def profile_query_all_performance():
+    with app.app_context():
+        profile_function(signatures.query_all, 'query_all')
+
+def profile_rotate_key_performance():
+    with app.app_context():
+        # Prepare the data
+        key = signatures.write_key_to_database(scope='test', expiration=1, active=True, email='test@example.com', previous_key=None)
+
+        # Run the test
+        profile_function(signatures.rotate_key, 'rotate_key', key)
+
+def profile_rotate_keys_performance():
+    with app.app_context():
+        # Prepare the data
+        for i in range(10):
+            signatures.write_key_to_database(scope='test', expiration=1, active=True, email='test'+str(i)+'@example.com', previous_key=None)
+
+        # Run the test
+        profile_function(signatures.rotate_keys, 'rotate_keys', time_until=1, scope='test')
+
+
+
 
 if __name__ == '__main__':
     test_write_key_to_database_performance()
@@ -133,4 +207,13 @@ if __name__ == '__main__':
     test_rotate_key_performance()
     test_rotate_keys_performance()
 
+    # profile checks
+    profile_write_key_to_database_performance()
+    profile_check_key_performance()
+    profile_verify_key_performance()
+    profile_expire_key_performance()
+    profile_query_keys_performance()
+    profile_query_all_performance()
+    profile_rotate_key_performance()
+    profile_rotate_keys_performance()
 
