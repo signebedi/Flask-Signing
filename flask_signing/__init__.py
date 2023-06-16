@@ -82,7 +82,7 @@ class Signatures:
 
                 # If rate limiting has not been enabled, then we always return True
                 if not instance.rate_limiting:
-                    return True
+                    return self.func(instance, signature, *args, **kwargs)
 
                 Signing = instance.get_model()
 
@@ -109,40 +109,6 @@ class Signatures:
 
                 return self.func(instance, signature, *args, **kwargs)
             return wrapper
-
-    @request_limiter
-    def validate_request(self, signature, scope):
-        """
-        Validates a request by verifying the given signing key against a specific scope.
-        
-        This function wraps the `verify_signature` function with rate limiting support. 
-        If rate limiting is enabled, it checks whether the request count for the signature 
-        has exceeded the maximum allowed requests within the specified time period.
-        
-        If the rate limit is exceeded, it raises a `RateLimitExceeded` exception and returns False.
-        If the rate limit is not exceeded, it calls the `verify_signature` function to verify the key.
-        
-        Args:
-            signature (str): The signing key to be verified.
-            scope (str): The scope against which the signing key will be validated.
-
-        Returns:
-            bool: True if the signing key is valid and hasn't exceeded rate limit, False otherwise.
-
-        Raises:
-            RateLimitExceeded: If the number of requests with this signing key exceeds 
-            the maximum allowed within the specified time period.
-        """
-
-        try:
-            valid = self.verify_signature(signature, scope)
-        except RateLimitExceeded as e:
-            print(e)  # Or handle the exception in some other way
-            return False
-
-        return valid
-
-
 
     def generate_key(self, length:int=None) -> str:
         """
@@ -236,10 +202,44 @@ class Signatures:
         signing_key.active = False
         self.db.session.commit()
         return True
+    
 
-    def verify_signature(self, signature, scope):
+    @request_limiter
+    def verify_key(self, signature, scope):
         """
-        Verifies the validity of a given signing key against a specific scope.
+        Validates a request by verifying the given signing key against a specific scope.
+        
+        This function wraps the `check_key` function and adds rate limiting support. 
+        If rate limiting is enabled, it checks whether the request count for the signature 
+        has exceeded the maximum allowed requests within the specified time period.
+        
+        If the rate limit is exceeded, it raises a `RateLimitExceeded` exception and returns False.
+        If the rate limit is not exceeded, or is not enabled, this calls the `check_key` function 
+        to verify the key.
+        
+        Args:
+            signature (str): The signing key to be verified.
+            scope (str): The scope against which the signing key will be validated.
+
+        Returns:
+            bool: True if the signing key is valid and hasn't exceeded rate limit, False otherwise.
+
+        Raises:
+            RateLimitExceeded: If the number of requests with this signing key exceeds 
+            the maximum allowed within the specified time period.
+        """
+
+        try:
+            valid = self.check_key(signature, scope)
+        except RateLimitExceeded as e:
+            print(e)  # Or handle the exception in some other way
+            return False
+
+        return valid
+
+    def check_key(self, signature, scope):
+        """
+        Checks the validity of a given signing key against a specific scope.
 
         This function checks if the signing key exists, if it is active, if it has not expired,
         and if its scope matches the provided scope. If all these conditions are met, the function
