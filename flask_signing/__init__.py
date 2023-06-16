@@ -8,6 +8,15 @@ from flask_sqlalchemy import SQLAlchemy
 from typing import Union, List, Dict, Any
 
 class RateLimitExceeded(Exception):
+    """
+    An exception that is raised when the request count for a specific signature 
+    exceeds the maximum allowed requests within a specified time period in the 
+    Signatures class.
+
+    This exception is used to signal that the rate limit has been exceeded, so the 
+    calling code can catch this exception and handle it appropriately - for example,
+    by sending an HTTP 429 Too Many Requests response to a client.
+    """
     pass
 
 class Signatures:
