@@ -44,6 +44,26 @@ class Signatures:
         self.rate_limiting_period = rate_limiting_period
 
     class request_limiter:
+        """
+        A descriptor class that wraps a function with rate limiting logic. This descriptor is meant to 
+        be used as a decorator for methods in the Signatures class.
+
+        If rate limiting is enabled in the Signatures instance, this decorator checks the request count 
+        for the provided signature and raises a `RateLimitExceeded` exception if the count exceeds 
+        the max requests allowed in a set time period. 
+
+        If the time period has passed since the last request, it resets the request count. If the request 
+        count is within limits, it increments the request count and updates the time of the last request.
+
+        If rate limiting is not enabled, the descriptor simply calls the original function.
+
+        Args:
+            func (Callable): The function to wrap with rate limiting logic.
+
+        Returns:
+            wrapper (Callable): The wrapped function which now includes rate limiting logic.
+        """
+
         def __init__(self, func):
             self.func = func
 
