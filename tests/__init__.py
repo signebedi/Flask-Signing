@@ -1,7 +1,7 @@
-import os, datetime, unittest
+import os, datetime, unittest, time
 from flask import Flask
 from flask_sqlalchemy import SQLAlchemy
-from flask_signing import Signatures
+from flask_signing import Signatures, RateLimitExceeded
 
 class TestFlaskSigning(unittest.TestCase):
 
@@ -212,6 +212,38 @@ class TestFlaskSigning(unittest.TestCase):
             new_late_expire_key = Signing.query.filter_by(previous_key=late_expire_key).first()
             # Check that the new key's previous_key is the old key
             self.assertEqual(new_late_expire_key.previous_key, late_expire_key)
+
+
+    def test_rate_limiting(self):
+        """
+        Test rate limiting functionality
+        """
+
+        with self.app.app_context():
+            # Enable rate limiting
+            self.signatures.rate_limiting = True
+            self.signatures.rate_limiting_max_requests = 2
+            self.signatures.rate_limiting_period = datetime.timedelta(seconds=2)
+
+            # Generate a signature
+            scope = ['example']
+            signature = self.signatures.write_key_to_database(scope=scope, active=True)
+
+            # Validate the key once, should return True
+            self.assertTrue(self.signatures.validate_request(signature, scope))
+
+            # Validate the key twice, should return True
+            self.assertTrue(self.signatures.validate_request(signature, scope))
+
+            # Now we expect a RateLimitExceeded exception because we are exceeding the rate limit
+            with self.assertRaises(RateLimitExceeded):
+                self.assertTrue(self.signatures.validate_request(signature, scope))
+
+            # Wait for the rate limit period to pass
+            time.sleep(2)
+
+            # Validate the key again, should return True
+            self.assertTrue(self.signatures.validate_request(signature, scope))
 
 
 if __name__ == '__main__':
