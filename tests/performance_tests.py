@@ -49,19 +49,19 @@ def profile_function(func, name, *args, **kwargs):
     ps.print_stats()
     logger.info(f'Profiling of {name}:\n{s.getvalue()}')
 
-def test_write_key_to_database_performance():
+def test_write_key_performance():
     with app.app_context():
 
         start_time = timeit.default_timer()
-        signatures.write_key_to_database(scope='test', expiration=1, active=True, email='test@example.com', previous_key=None)
+        signatures.write_key(scope='test', expiration=1, active=True, email='test@example.com', previous_key=None)
         end_time = timeit.default_timer()
         elapsed_time = end_time - start_time
-        logger.info(f'Performance of write_key_to_database: {elapsed_time} seconds')
+        logger.info(f'Performance of write_key: {elapsed_time} seconds')
 
 def test_check_key_performance():
     with app.app_context():
 
-        key = signatures.write_key_to_database(scope='test', expiration=1, active=True, email='test@example.com', previous_key=None)
+        key = signatures.write_key(scope='test', expiration=1, active=True, email='test@example.com', previous_key=None)
         start_time = timeit.default_timer()
         signatures.check_key(key, 'test')
         end_time = timeit.default_timer()
@@ -72,7 +72,7 @@ def test_verify_key_performance():
     with app.app_context():
         signatures.rate_limiting = False  # Disable rate limiting for performance test
 
-        key = signatures.write_key_to_database(scope='test', expiration=1, active=True, email='test@example.com', previous_key=None)
+        key = signatures.write_key(scope='test', expiration=1, active=True, email='test@example.com', previous_key=None)
         start_time = timeit.default_timer()
         signatures.verify_key(key, 'test')
         end_time = timeit.default_timer()
@@ -84,7 +84,7 @@ def test_verify_key_performance():
 
 def test_expire_key_performance():
     with app.app_context():
-        key = signatures.write_key_to_database(scope='test', expiration=1, active=True, email='test@example.com', previous_key=None)
+        key = signatures.write_key(scope='test', expiration=1, active=True, email='test@example.com', previous_key=None)
         start_time = timeit.default_timer()
         signatures.expire_key(key)
         end_time = timeit.default_timer()
@@ -95,7 +95,7 @@ def test_query_keys_performance():
     with app.app_context():
         # Prepare the data
         for i in range(10):
-            signatures.write_key_to_database(scope='test', expiration=1, active=True, email='test'+str(i)+'@example.com', previous_key=None)
+            signatures.write_key(scope='test', expiration=1, active=True, email='test'+str(i)+'@example.com', previous_key=None)
 
         # Run the test
         start_time = timeit.default_timer()
@@ -116,7 +116,7 @@ def test_query_all_performance():
 def test_rotate_key_performance():
     with app.app_context():
         # Prepare the data
-        key = signatures.write_key_to_database(scope='test', expiration=1, active=True, email='test@example.com', previous_key=None)
+        key = signatures.write_key(scope='test', expiration=1, active=True, email='test@example.com', previous_key=None)
 
         # Run the test
         start_time = timeit.default_timer()
@@ -130,7 +130,7 @@ def test_rotate_keys_performance():
     with app.app_context():
         # Prepare the data
         for i in range(10):
-            signatures.write_key_to_database(scope='test', expiration=1, active=True, email='test'+str(i)+'@example.com', previous_key=None)
+            signatures.write_key(scope='test', expiration=1, active=True, email='test'+str(i)+'@example.com', previous_key=None)
 
         # Run the test
         start_time = timeit.default_timer()
@@ -141,34 +141,34 @@ def test_rotate_keys_performance():
 
 # Here we add the cProfile tests
 
-def profile_write_key_to_database_performance():
+def profile_write_key_performance():
     with app.app_context():
-        profile_function(signatures.write_key_to_database, 'write_key_to_database', scope='test', expiration=1, active=True, email='test@example.com', previous_key=None)
+        profile_function(signatures.write_key, 'write_key', scope='test', expiration=1, active=True, email='test@example.com', previous_key=None)
 
 def profile_check_key_performance():
     with app.app_context():
-        key = signatures.write_key_to_database(scope='test', expiration=1, active=True, email='test@example.com', previous_key=None)
+        key = signatures.write_key(scope='test', expiration=1, active=True, email='test@example.com', previous_key=None)
         profile_function(signatures.check_key, 'check_key', key, 'test')
 
 def profile_verify_key_performance():
     with app.app_context():
         signatures.rate_limiting = False  # Disable rate limiting for performance test
 
-        key = signatures.write_key_to_database(scope='test', expiration=1, active=True, email='test@example.com', previous_key=None)
+        key = signatures.write_key(scope='test', expiration=1, active=True, email='test@example.com', previous_key=None)
         profile_function(signatures.verify_key, 'verify_key', key, 'test')
 
         signatures.rate_limiting = True  # Re-enable rate limiting after test
 
 def profile_expire_key_performance():
     with app.app_context():
-        key = signatures.write_key_to_database(scope='test', expiration=1, active=True, email='test@example.com', previous_key=None)
+        key = signatures.write_key(scope='test', expiration=1, active=True, email='test@example.com', previous_key=None)
         profile_function(signatures.expire_key, 'expire_key', key)
 
 def profile_query_keys_performance():
     with app.app_context():
         # Prepare the data
         for i in range(10):
-            signatures.write_key_to_database(scope='test', expiration=1, active=True, email='test'+str(i)+'@example.com', previous_key=None)
+            signatures.write_key(scope='test', expiration=1, active=True, email='test'+str(i)+'@example.com', previous_key=None)
 
         # Run the test
         profile_function(signatures.query_keys, 'query_keys', active=True, scope='test', email='test5@example.com')
@@ -180,7 +180,7 @@ def profile_query_all_performance():
 def profile_rotate_key_performance():
     with app.app_context():
         # Prepare the data
-        key = signatures.write_key_to_database(scope='test', expiration=1, active=True, email='test@example.com', previous_key=None)
+        key = signatures.write_key(scope='test', expiration=1, active=True, email='test@example.com', previous_key=None)
 
         # Run the test
         profile_function(signatures.rotate_key, 'rotate_key', key)
@@ -189,7 +189,7 @@ def profile_rotate_keys_performance():
     with app.app_context():
         # Prepare the data
         for i in range(10):
-            signatures.write_key_to_database(scope='test', expiration=1, active=True, email='test'+str(i)+'@example.com', previous_key=None)
+            signatures.write_key(scope='test', expiration=1, active=True, email='test'+str(i)+'@example.com', previous_key=None)
 
         # Run the test
         profile_function(signatures.rotate_keys, 'rotate_keys', time_until=1, scope='test')
@@ -198,7 +198,7 @@ def profile_rotate_keys_performance():
 
 
 if __name__ == '__main__':
-    test_write_key_to_database_performance()
+    test_write_key_performance()
     test_check_key_performance()
     test_verify_key_performance()
     test_expire_key_performance()
@@ -208,7 +208,7 @@ if __name__ == '__main__':
     test_rotate_keys_performance()
 
     # profile checks
-    profile_write_key_to_database_performance()
+    profile_write_key_performance()
     profile_check_key_performance()
     profile_verify_key_performance()
     profile_expire_key_performance()

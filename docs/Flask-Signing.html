@@ -95,13 +95,13 @@ img {
 <p><strong>Key expiration</strong>: <code>expire_key(key: str) -&gt; bool</code> allows for the expiration of a key in the database by setting its 'active' status to False.</p>
 </li>
 <li>
-<p><strong>Support for multiple &quot;scopes&quot;</strong>: <code>write_key_to_database(scope: str, expiration: int, active: bool, email: str, previous_key: str) -&gt; str</code> writes a generated key to the database with an associated scope, expiration, status, email, and previous key (for key rotation).</p>
+<p><strong>Support for multiple &quot;scopes&quot;</strong>: <code>write_key(scope: str, expiration: int, active: bool, email: str, previous_key: str) -&gt; str</code> writes a generated key to the database with an associated scope, expiration, status, email, and previous key (for key rotation).</p>
 </li>
 <li>
 <p><strong>Rate limiting</strong>: Integrated rate limiting functionality which can be activated via the <code>Signatures</code> class constructor.</p>
 </li>
 <li>
-<p><strong>Key rotation</strong>: <code>write_key_to_database</code> also handles key rotation by associating a new key with a previous one.</p>
+<p><strong>Key rotation</strong>: <code>write_key</code> also handles key rotation by associating a new key with a previous one.</p>
 </li>
 </ol>
 </section>
@@ -158,7 +158,7 @@ img {
 </ul>
 <pre is="marp-pre" data-auto-scaling="downscale-only"><code class="language-python"><span class="hljs-meta">@app.route(<span class="hljs-params"><span class="hljs-string">&#x27;/sign&#x27;</span></span>)</span>
 <span class="hljs-keyword">def</span> <span class="hljs-title function_">sign</span>():
-    key = signatures.write_key_to_database(scope=<span class="hljs-string">&#x27;test&#x27;</span>, expiration=<span class="hljs-number">1</span>, active=<span class="hljs-literal">True</span>, email=<span class="hljs-string">&#x27;test@example.com&#x27;</span>)
+    key = signatures.write_key(scope=<span class="hljs-string">&#x27;test&#x27;</span>, expiration=<span class="hljs-number">1</span>, active=<span class="hljs-literal">True</span>, email=<span class="hljs-string">&#x27;test@example.com&#x27;</span>)
     <span class="hljs-keyword">return</span> <span class="hljs-string">f&#x27;Key generated: <span class="hljs-subst">{key}</span>&#x27;</span>
 </code></pre>
 <ul>

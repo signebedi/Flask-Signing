@@ -48,14 +48,14 @@ class TestFlaskSigning(unittest.TestCase):
     #     Test if a key can be written to the database and then successfully expired.
     #     """
     #     with self.app.app_context():
-    #         key = self.signatures.write_key_to_database(scope='test')
+    #         key = self.signatures.write_key(scope='test')
     #     self.assertIsNotNone(Signing.query.filter_by(signature=key).first())
     #     self.signatures.expire_key(key)
     #     self.assertFalse(Signing.query.filter_by(signature=key).first().active)
 
     def test_write_and_expire_key_string_scope(self):
         with self.app.app_context():
-            key = self.signatures.write_key_to_database(scope='test')
+            key = self.signatures.write_key(scope='test')
             Signing = self.signatures.get_model()
             self.assertIsNotNone(Signing.query.filter_by(signature=key).first())
             self.signatures.expire_key(key)
@@ -63,7 +63,7 @@ class TestFlaskSigning(unittest.TestCase):
 
     def test_write_and_expire_key_list_scope(self):
         with self.app.app_context():
-            key = self.signatures.write_key_to_database(scope=['test', 'task', 'tusk'])
+            key = self.signatures.write_key(scope=['test', 'task', 'tusk'])
             Signing = self.signatures.get_model()
             self.assertIsNotNone(Signing.query.filter_by(signature=key).first())
             self.signatures.expire_key(key)
@@ -74,11 +74,11 @@ class TestFlaskSigning(unittest.TestCase):
         Test if a signature can be successfully verified.
         """
         with self.app.app_context():
-            key = self.signatures.write_key_to_database(scope='test')
+            key = self.signatures.write_key(scope='test')
             self.assertTrue(self.signatures.verify_key(signature=key, scope='test'))
 
             # Test expired key
-            expired_key = self.signatures.write_key_to_database(scope='test', expiration=-1)
+            expired_key = self.signatures.write_key(scope='test', expiration=-1)
             self.assertFalse(self.signatures.verify_key(signature=expired_key, scope='test'))
 
             # Test non-existent key
@@ -89,8 +89,8 @@ class TestFlaskSigning(unittest.TestCase):
         Test if the query_keys method returns correct records.
         """
         with self.app.app_context():
-            key1 = self.signatures.write_key_to_database(scope='test1', email='test1@example.com')
-            key2 = self.signatures.write_key_to_database(scope='test2', email='test2@example.com', active=True)
+            key1 = self.signatures.write_key(scope='test1', email='test1@example.com')
+            key2 = self.signatures.write_key(scope='test2', email='test2@example.com', active=True)
             key3 = self.signatures.rotate_key(key2)  # Generate a new key using rotate_key which assigns previous_key
 
             # Test querying by active status
@@ -134,7 +134,7 @@ class TestFlaskSigning(unittest.TestCase):
         Test if a key can be rotated and replaced with a new one.
         """
         with self.app.app_context():
-            key = self.signatures.write_key_to_database(scope='test')
+            key = self.signatures.write_key(scope='test')
             Signing = self.signatures.get_model()
             signing_key = Signing.query.filter_by(signature=key).first()
 
@@ -181,11 +181,11 @@ class TestFlaskSigning(unittest.TestCase):
         """
         with self.app.app_context():
             # Create keys that will expire soon
-            soon_expire_key1 = self.signatures.write_key_to_database(scope='test1', expiration=1)
-            soon_expire_key2 = self.signatures.write_key_to_database(scope='test2', expiration=1)
+            soon_expire_key1 = self.signatures.write_key(scope='test1', expiration=1)
+            soon_expire_key2 = self.signatures.write_key(scope='test2', expiration=1)
 
             # Create a key that won't expire soon
-            late_expire_key = self.signatures.write_key_to_database(scope='test3', expiration=2)
+            late_expire_key = self.signatures.write_key(scope='test3', expiration=2)
 
             # Rotate keys
             self.signatures.rotate_keys(time_until=1)
@@ -227,7 +227,7 @@ class TestFlaskSigning(unittest.TestCase):
 
             # Generate a signature
             scope = ['example']
-            signature = self.signatures.write_key_to_database(scope=scope, active=True)
+            signature = self.signatures.write_key(scope=scope, active=True)
 
             # Validate the key once, should return True
             self.assertTrue(self.signatures.verify_key(signature, scope))

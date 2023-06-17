@@ -127,7 +127,7 @@ class Signatures:
             length = self.byte_len
         return secrets.token_urlsafe(length)
 
-    def write_key_to_database(self, scope:str=None, expiration:int=1, active:bool=True, email:str=None, previous_key:str=None) -> str:
+    def write_key(self, scope:str=None, expiration:int=1, active:bool=True, email:str=None, previous_key:str=None) -> str:
         """
         Writes a newly generated signing key to the database.
 
@@ -478,7 +478,7 @@ class Signatures:
             self.db.session.flush()
 
             # Generate a new key with the same properties
-            new_key = self.write_key_to_database(
+            new_key = self.write_key(
                 scope=signing_key.scope, 
                 expiration=expiration, 
                 active=True, 

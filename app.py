@@ -12,12 +12,12 @@ with app.app_context():
 
 @app.route('/sign')
 def sign():
-    key = signatures.write_key_to_database(scope=['test', 'task', 'tusk'], expiration=1, active=True, email='test@example.com')
+    key = signatures.write_key(scope=['test', 'task', 'tusk'], expiration=1, active=True, email='test@example.com')
     return f'Key generated: {key}'
 
 @app.route('/verify/<key>')
 def verify(key):
-    valid = signatures.verify_key(signature, scope)(signature=key, scope='test')
+    valid = signatures.verify_key(signature=key, scope='test')
     return f'Key valid: {valid}'
 
 @app.route('/expire/<key>')

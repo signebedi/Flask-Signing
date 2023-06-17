@@ -155,7 +155,7 @@ class Signatures:
             length = self.byte_len
         return secrets.token_urlsafe(length)
 
-    def write_key_to_database(self, scope:str=None, expiration:int=1, active:bool=True, email:str=None, previous_key:str=None) -&gt; str:
+    def write_key(self, scope:str=None, expiration:int=1, active:bool=True, email:str=None, previous_key:str=None) -&gt; str:
         &#34;&#34;&#34;
         Writes a newly generated signing key to the database.
 
@@ -506,7 +506,7 @@ class Signatures:
             self.db.session.flush()
 
             # Generate a new key with the same properties
-            new_key = self.write_key_to_database(
+            new_key = self.write_key(
                 scope=signing_key.scope, 
                 expiration=expiration, 
                 active=True, 
@@ -704,7 +704,7 @@ of signing keys in the database.</p>
             length = self.byte_len
         return secrets.token_urlsafe(length)
 
-    def write_key_to_database(self, scope:str=None, expiration:int=1, active:bool=True, email:str=None, previous_key:str=None) -&gt; str:
+    def write_key(self, scope:str=None, expiration:int=1, active:bool=True, email:str=None, previous_key:str=None) -&gt; str:
         &#34;&#34;&#34;
         Writes a newly generated signing key to the database.
 
@@ -1055,7 +1055,7 @@ of signing keys in the database.</p>
             self.db.session.flush()
 
             # Generate a new key with the same properties
-            new_key = self.write_key_to_database(
+            new_key = self.write_key(
                 scope=signing_key.scope, 
                 expiration=expiration, 
                 active=True, 
@@ -1525,7 +1525,7 @@ If no keys are found, it returns False.</p>
         self.db.session.flush()
 
         # Generate a new key with the same properties
-        new_key = self.write_key_to_database(
+        new_key = self.write_key(
             scope=signing_key.scope, 
             expiration=expiration, 
             active=True, 
@@ -1690,8 +1690,8 @@ def verify_key(self, signature, scope):
     return valid</code></pre>
 </details>
 </dd>
-<dt id="flask_signing.Signatures.write_key_to_database"><code class="name flex">
-<span>def <span class="ident">write_key_to_database</span></span>(<span>self, scope: str = None, expiration: int = 1, active: bool = True, email: str = None, previous_key: str = None) ‑> str</span>
+<dt id="flask_signing.Signatures.write_key"><code class="name flex">
+<span>def <span class="ident">write_key</span></span>(<span>self, scope: str = None, expiration: int = 1, active: bool = True, email: str = None, previous_key: str = None) ‑> str</span>
 </code></dt>
 <dd>
 <div class="desc"><p>Writes a newly generated signing key to the database.</p>
@@ -1719,7 +1719,7 @@ If not provided or equals 0, the expiration will be set to zero. Defaults to 1.<
 <summary>
 <span>Expand source code</span>
 </summary>
-<pre><code class="python">def write_key_to_database(self, scope:str=None, expiration:int=1, active:bool=True, email:str=None, previous_key:str=None) -&gt; str:
+<pre><code class="python">def write_key(self, scope:str=None, expiration:int=1, active:bool=True, email:str=None, previous_key:str=None) -&gt; str:
     &#34;&#34;&#34;
     Writes a newly generated signing key to the database.
 
@@ -1788,7 +1788,7 @@ If not provided or equals 0, the expiration will be set to zero. Defaults to 1.<
 </li>
 <li>
 <h4><code><a title="flask_signing.Signatures" href="#flask_signing.Signatures">Signatures</a></code></h4>
-<ul class="">
+<ul class="two-column">
 <li><code><a title="flask_signing.Signatures.check_key" href="#flask_signing.Signatures.check_key">check_key</a></code></li>
 <li><code><a title="flask_signing.Signatures.expire_key" href="#flask_signing.Signatures.expire_key">expire_key</a></code></li>
 <li><code><a title="flask_signing.Signatures.generate_key" href="#flask_signing.Signatures.generate_key">generate_key</a></code></li>
@@ -1799,7 +1799,7 @@ If not provided or equals 0, the expiration will be set to zero. Defaults to 1.<
 <li><code><a title="flask_signing.Signatures.rotate_key" href="#flask_signing.Signatures.rotate_key">rotate_key</a></code></li>
 <li><code><a title="flask_signing.Signatures.rotate_keys" href="#flask_signing.Signatures.rotate_keys">rotate_keys</a></code></li>
 <li><code><a title="flask_signing.Signatures.verify_key" href="#flask_signing.Signatures.verify_key">verify_key</a></code></li>
-<li><code><a title="flask_signing.Signatures.write_key_to_database" href="#flask_signing.Signatures.write_key_to_database">write_key_to_database</a></code></li>
+<li><code><a title="flask_signing.Signatures.write_key" href="#flask_signing.Signatures.write_key">write_key</a></code></li>
 </ul>
 </li>
 </ul>
