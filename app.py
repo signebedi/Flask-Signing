@@ -33,7 +33,7 @@ def query():
 
 @app.route('/all')
 def all():
-    all = signatures.query_all()
+    all = signatures.get_all()
     return f'Response: {all}'
 
 @app.route('/rotate/<key>', methods=['GET'])

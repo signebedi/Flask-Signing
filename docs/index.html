@@ -410,7 +410,7 @@ class Signatures:
 
         return [{&#39;signature&#39;: key.signature, &#39;email&#39;: key.email, &#39;scope&#39;: key.scope, &#39;active&#39;: key.active, &#39;timestamp&#39;: key.timestamp, &#39;expiration&#39;: key.expiration, &#39;previous_key&#39;: key.previous_key, &#39;rotated&#39;: key.rotated} for key in result]
 
-    def query_all(self) -&gt; List[Dict[str, Any]]:
+    def get_all(self) -&gt; List[Dict[str, Any]]:
 
         &#34;&#34;&#34;
         Query all values in the Signing table.
@@ -959,7 +959,7 @@ of signing keys in the database.</p>
 
         return [{&#39;signature&#39;: key.signature, &#39;email&#39;: key.email, &#39;scope&#39;: key.scope, &#39;active&#39;: key.active, &#39;timestamp&#39;: key.timestamp, &#39;expiration&#39;: key.expiration, &#39;previous_key&#39;: key.previous_key, &#39;rotated&#39;: key.rotated} for key in result]
 
-    def query_all(self) -&gt; List[Dict[str, Any]]:
+    def get_all(self) -&gt; List[Dict[str, Any]]:
 
         &#34;&#34;&#34;
         Query all values in the Signing table.
@@ -1296,6 +1296,34 @@ see <a href="https://docs.python.org/3/library/secrets.html.">https://docs.pytho
     return secrets.token_urlsafe(length)</code></pre>
 </details>
 </dd>
+<dt id="flask_signing.Signatures.get_all"><code class="name flex">
+<span>def <span class="ident">get_all</span></span>(<span>self) ‑> List[Dict[str, Any]]</span>
+</code></dt>
+<dd>
+<div class="desc"><p>Query all values in the Signing table.
+If no keys are found, it returns an empty list.</p>
+<h2 id="returns">Returns</h2>
+<dl>
+<dt><code>List[Dict[str, Any]]</code></dt>
+<dd>A list of dictionaries where each dictionary contains the details of a signing key.</dd>
+</dl></div>
+<details class="source">
+<summary>
+<span>Expand source code</span>
+</summary>
+<pre><code class="python">def get_all(self) -&gt; List[Dict[str, Any]]:
+
+    &#34;&#34;&#34;
+    Query all values in the Signing table.
+    If no keys are found, it returns an empty list.
+
+    Returns:
+        List[Dict[str, Any]]: A list of dictionaries where each dictionary contains the details of a signing key.
+
+    &#34;&#34;&#34;
+    return [{&#39;signature&#39;: key.signature, &#39;email&#39;: key.email, &#39;scope&#39;: key.scope, &#39;active&#39;: key.active, &#39;timestamp&#39;: key.timestamp, &#39;expiration&#39;: key.expiration, &#39;previous_key&#39;: key.previous_key, &#39;rotated&#39;: key.rotated} for key in self.get_model().query.all()]</code></pre>
+</details>
+</dd>
 <dt id="flask_signing.Signatures.get_model"><code class="name flex">
 <span>def <span class="ident">get_model</span></span>(<span>self)</span>
 </code></dt>
@@ -1359,34 +1387,6 @@ see <a href="https://docs.python.org/3/library/secrets.html.">https://docs.pytho
         self._model = Signing
 
     return self._model</code></pre>
-</details>
-</dd>
-<dt id="flask_signing.Signatures.query_all"><code class="name flex">
-<span>def <span class="ident">query_all</span></span>(<span>self) ‑> List[Dict[str, Any]]</span>
-</code></dt>
-<dd>
-<div class="desc"><p>Query all values in the Signing table.
-If no keys are found, it returns an empty list.</p>
-<h2 id="returns">Returns</h2>
-<dl>
-<dt><code>List[Dict[str, Any]]</code></dt>
-<dd>A list of dictionaries where each dictionary contains the details of a signing key.</dd>
-</dl></div>
-<details class="source">
-<summary>
-<span>Expand source code</span>
-</summary>
-<pre><code class="python">def query_all(self) -&gt; List[Dict[str, Any]]:
-
-    &#34;&#34;&#34;
-    Query all values in the Signing table.
-    If no keys are found, it returns an empty list.
-
-    Returns:
-        List[Dict[str, Any]]: A list of dictionaries where each dictionary contains the details of a signing key.
-
-    &#34;&#34;&#34;
-    return [{&#39;signature&#39;: key.signature, &#39;email&#39;: key.email, &#39;scope&#39;: key.scope, &#39;active&#39;: key.active, &#39;timestamp&#39;: key.timestamp, &#39;expiration&#39;: key.expiration, &#39;previous_key&#39;: key.previous_key, &#39;rotated&#39;: key.rotated} for key in self.get_model().query.all()]</code></pre>
 </details>
 </dd>
 <dt id="flask_signing.Signatures.query_keys"><code class="name flex">
@@ -1792,8 +1792,8 @@ If not provided or equals 0, the expiration will be set to zero. Defaults to 1.<
 <li><code><a title="flask_signing.Signatures.check_key" href="#flask_signing.Signatures.check_key">check_key</a></code></li>
 <li><code><a title="flask_signing.Signatures.expire_key" href="#flask_signing.Signatures.expire_key">expire_key</a></code></li>
 <li><code><a title="flask_signing.Signatures.generate_key" href="#flask_signing.Signatures.generate_key">generate_key</a></code></li>
+<li><code><a title="flask_signing.Signatures.get_all" href="#flask_signing.Signatures.get_all">get_all</a></code></li>
 <li><code><a title="flask_signing.Signatures.get_model" href="#flask_signing.Signatures.get_model">get_model</a></code></li>
-<li><code><a title="flask_signing.Signatures.query_all" href="#flask_signing.Signatures.query_all">query_all</a></code></li>
 <li><code><a title="flask_signing.Signatures.query_keys" href="#flask_signing.Signatures.query_keys">query_keys</a></code></li>
 <li><code><a title="flask_signing.Signatures.request_limiter" href="#flask_signing.Signatures.request_limiter">request_limiter</a></code></li>
 <li><code><a title="flask_signing.Signatures.rotate_key" href="#flask_signing.Signatures.rotate_key">rotate_key</a></code></li>

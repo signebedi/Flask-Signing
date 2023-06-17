@@ -56,7 +56,7 @@ def expire(key):
     
 @app.route('/all')
 def all():
-    all = signatures.query_all()
+    all = signatures.get_all()
     return f'Response: {all}'
 ```
 

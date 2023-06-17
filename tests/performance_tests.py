@@ -104,13 +104,13 @@ def test_query_keys_performance():
         elapsed_time = end_time - start_time
         logger.info(f'Performance of query_keys: {elapsed_time} seconds')
 
-def test_query_all_performance():
+def test_get_all_performance():
     with app.app_context():
         start_time = timeit.default_timer()
-        signatures.query_all()
+        signatures.get_all()
         end_time = timeit.default_timer()
         elapsed_time = end_time - start_time
-        logger.info(f'Performance of query_all: {elapsed_time} seconds')
+        logger.info(f'Performance of get_all: {elapsed_time} seconds')
 
 
 def test_rotate_key_performance():
@@ -173,9 +173,9 @@ def profile_query_keys_performance():
         # Run the test
         profile_function(signatures.query_keys, 'query_keys', active=True, scope='test', email='test5@example.com')
 
-def profile_query_all_performance():
+def profile_get_all_performance():
     with app.app_context():
-        profile_function(signatures.query_all, 'query_all')
+        profile_function(signatures.get_all, 'get_all')
 
 def profile_rotate_key_performance():
     with app.app_context():
@@ -203,7 +203,7 @@ if __name__ == '__main__':
     test_verify_key_performance()
     test_expire_key_performance()
     test_query_keys_performance()
-    test_query_all_performance()
+    test_get_all_performance()
     test_rotate_key_performance()
     test_rotate_keys_performance()
 
@@ -213,7 +213,7 @@ if __name__ == '__main__':
     profile_verify_key_performance()
     profile_expire_key_performance()
     profile_query_keys_performance()
-    profile_query_all_performance()
+    profile_get_all_performance()
     profile_rotate_key_performance()
     profile_rotate_keys_performance()
 

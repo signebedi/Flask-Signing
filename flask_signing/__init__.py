@@ -382,7 +382,7 @@ class Signatures:
 
         return [{'signature': key.signature, 'email': key.email, 'scope': key.scope, 'active': key.active, 'timestamp': key.timestamp, 'expiration': key.expiration, 'previous_key': key.previous_key, 'rotated': key.rotated} for key in result]
 
-    def query_all(self) -> List[Dict[str, Any]]:
+    def get_all(self) -> List[Dict[str, Any]]:
 
         """
         Query all values in the Signing table.
