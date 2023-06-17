@@ -38,16 +38,13 @@ class Signatures:
             rate_limiting_max_requests (int, optional): Maximum allowed requests per time period.
             rate_limiting_period (datetime.timedelta, optional): Time period for rate limiting. Defaults to 1 hour.
         """
-        with app.app_context():
-            if db is not None:
-                self.db = db
-            else:
-                self.db = SQLAlchemy(app)
-
-            self.db.create_all()  # this will create all necessary tables
-
+        if db is not None:
+            self.db = db
             self.Signing = self.get_model()
-
+        else:
+            self.db = SQLAlchemy(app)
+            self.Signing = self.get_model()
+            self.db.create_all()  # this will create all necessary tables
 
         self.byte_len = byte_len
 
