@@ -22,9 +22,9 @@ First, install the flask_signing package. You can do this with pip:
 pip install flask_signing
 ```
 
-### Usage
+### Basic Usage
 
-After you've installed the package, you can use it in your Flask application. Here's an example of how you might do this:
+After you've installed the flask_signing package, you can use it in your Flask application. Here's an example of how you might do this:
 
 ```python
 from flask import Flask
@@ -60,9 +60,9 @@ def all():
     return f'Response: {all}'
 ```
 
-In this example, a new signing key is generated and written to the database when you visit the /sign route, and the key is displayed on the page. Then, when you visit the /verify/<key> route (replace <key> with the actual key), the validity of the key is checked and displayed. You can expire a key using the /expire/<key> route, and view all records with the /all route.
+In this basic example, a new signing key is generated and written to the database when you visit the `/sign` route, and the key is displayed on the page. Then, when you visit the `/verify/<key>` route (replace <key> with the actual key), the validity of the key is checked and displayed. You can expire a key using the `/expire/<key>` route, and view all records with the `/all` route.
 
-Please note that this is a very basic example and your actual use of the flask_signing package may be more complex depending on your needs. It's important to secure your signing keys and handle them appropriately according to your application's security requirements.
+This is a rather basic example and your actual use of the flask_signing package may be more complex depending on your needs. It's important to secure your signing keys and handle them appropriately according to your application's security requirements. Further usage examples can be found in the [examples](https://github.com/signebedi/Flask-Signing/tree/master/examples) directory of the Flask-Signing Github repository. 
 
 ### Developers
 

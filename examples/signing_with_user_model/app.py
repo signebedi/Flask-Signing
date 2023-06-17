@@ -5,8 +5,8 @@ from werkzeug.security import generate_password_hash, check_password_hash
 from flask_signing import Signatures
 
 app = Flask(__name__)
-app.config['SECRET_KEY'] = 'Thisissupposedtobesecret!'
 app.config['SQLALCHEMY_DATABASE_URI'] = 'sqlite://'  # Use your actual database URI
+app.config['SECRET_KEY'] = 'Your_Key_Here'
 
 db = SQLAlchemy(app)
 login_manager = LoginManager()
@@ -19,6 +19,8 @@ class User(UserMixin, db.Model):
     password = db.Column(db.String(80))
 
 with app.app_context():
+    # You should instantiate the Signatures class prior to calling 
+    # create_all() on your db instance
     signatures = Signatures(app, db=db, byte_len=24, rate_limiting=True)
     db.create_all()
 
