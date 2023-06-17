@@ -25,22 +25,29 @@ class Signatures:
     of signing keys in the database.
     """
     
-    def __init__(self, app, safe_mode:bool=True, byte_len:int=24, rate_limiting=False, rate_limiting_max_requests=10, rate_limiting_period=datetime.timedelta(minutes=1)):
+    def __init__(self, app, db=None, safe_mode:bool=True, byte_len:int=24, rate_limiting=False, rate_limiting_max_requests=10, rate_limiting_period=datetime.timedelta(minutes=1)):
         """
         Initializes a new instance of the Signatures class.
 
         Args:
             app (Flask): A flask object to contain the context for database interactions. 
+            db (SQLAlchemy, optional): An optional SQLAlchemy db object to inherit an app's existing data model. Defaults to False.
             safe_mode (bool, optional): If safe_mode is enabled, we will prevent rotation of disabled or rotated keys. Defaults to True.
             byte_len (int, optional): The length of the generated signing keys. Defaults to 24.
             rate_limiting (bool, optional): If rate_limiting is enabled, we will impose key-by-key rate limits. Defaults to False.
             rate_limiting_max_requests (int, optional): Maximum allowed requests per time period.
             rate_limiting_period (datetime.timedelta, optional): Time period for rate limiting. Defaults to 1 hour.
         """
+        with app.app_context():
+            if db is not None:
+                self.db = db
+            else:
+                self.db = SQLAlchemy(app)
 
-        self.db = SQLAlchemy(app)
-        self.Signing = self.get_model()
-        self.db.create_all()  # this will create all necessary tables
+            self.db.create_all()  # this will create all necessary tables
+
+            self.Signing = self.get_model()
+
 
         self.byte_len = byte_len
 
