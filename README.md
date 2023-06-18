@@ -6,6 +6,7 @@
 [![PyPI version](https://badge.fury.io/py/Flask-Signing.svg)](https://pypi.org/project/flask-signing/)
 [![Downloads](https://static.pepy.tech/personalized-badge/flask-signing?period=total&units=international_system&left_color=grey&right_color=brightgreen&left_text=Downloads)](https://pepy.tech/project/flask-signing)
 [![Flask-Signing tests](https://github.com/signebedi/Flask-Signing/workflows/tests/badge.svg)](https://github.com/signebedi/Flask-Signing/actions)
+[![Buy me a coffee](https://img.shields.io/badge/Buy%20me%20a%20coffee--brightgreen.svg?logo=buy-me-a-coffee&logoColor=brightgreen)](https://www.buymeacoffee.com/signebedi)
 
 a signing key extension for flask
 
