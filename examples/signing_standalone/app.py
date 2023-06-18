@@ -1,4 +1,4 @@
-from flask import Flask
+from flask import Flask, jsonify
 from flask_signing import Signatures
 
 app = Flask(__name__)
@@ -56,6 +56,14 @@ def rotate_keys(time_until):
             return 'Failed to rotate keys', 400
     except Exception as e:
         return str(e), 500
+
+# for debug purposes, you can spit out the contents of the signing and user tables
+@app.route('/show_data', methods=['GET'])
+def show_data():
+    data = {}
+    for table in signatures.db.metadata.sorted_tables:
+        data[str(table)] = [{column.name: getattr(row, column.name) for column in table.columns} for row in signatures.db.session.query(table).all()]
+    return jsonify(data)
 
 if __name__=="__main__":
     app.run(debug=True)
