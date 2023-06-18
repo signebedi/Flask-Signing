@@ -545,59 +545,59 @@ class DangerousSignatures(Signatures):
 
         return self.serializer.dumps(data)
 
-    def check_key(self, signature, scope):
-        """
-        Checks the validity of a given signing key against a specific scope.
+    # def check_key(self, signature, scope):
+    #     """
+    #     Checks the validity of a given signing key against a specific scope.
 
-        This function checks if the signing key exists, if it is active, if it has not expired,
-        and if its scope matches the provided scope. If all these conditions are met, the function
-        returns True, otherwise, it returns False.
+    #     This function checks if the signing key exists, if it is active, if it has not expired,
+    #     and if its scope matches the provided scope. If all these conditions are met, the function
+    #     returns True, otherwise, it returns False.
 
-        Args:
-            signature (str): The signing key to be verified.
-            scope (str): The scope against which the signing key will be validated.
+    #     Args:
+    #         signature (str): The signing key to be verified.
+    #         scope (str): The scope against which the signing key will be validated.
 
-        Returns:
-            bool: True if the signing key is valid and False otherwise.
-        """
+    #     Returns:
+    #         bool: True if the signing key is valid and False otherwise.
+    #     """
 
-        Signing = self.get_model()
+    #     Signing = self.get_model()
 
-        # try to decode the signature using the serializer
-        try:
-            data = self.serializer.loads(signature)
+    #     # try to decode the signature using the serializer
+    #     try:
+    #         data = self.serializer.loads(signature)
 
-            # if the signature doesn't contain a key, it's invalid
-            if "key" not in data:
-                return False
+    #         # if the signature doesn't contain a key, it's invalid
+    #         if "key" not in data:
+    #             return False
 
-            signing_key = Signing.query.filter_by(signature=data["key"]).first()
+    #         signing_key = Signing.query.filter_by(signature=data["key"]).first()
 
-        except (itsdangerous.BadSignature, itsdangerous.SignatureExpired):
-            return False  # if the signature cannot be decoded or is expired, it's invalid
-        except Exception as e:
-            print(f"Unexpected error while decoding signature: {e}")
-            return False
+    #     except (itsdangerous.BadSignature, itsdangerous.SignatureExpired):
+    #         return False  # if the signature cannot be decoded or is expired, it's invalid
+    #     except Exception as e:
+    #         print(f"Unexpected error while decoding signature: {e}")
+    #         return False
 
-        # if the key doesn't exist
-        if not signing_key:
-            return False
+    #     # if the key doesn't exist
+    #     if not signing_key:
+    #         return False
 
-        # if the signing key's expiration time has passed
-        if signing_key.expiration < datetime.datetime.utcnow():
-            self.expire_key(data["key"])
-            return False
+    #     # if the signing key's expiration time has passed
+    #     if signing_key.expiration < datetime.datetime.utcnow():
+    #         self.expire_key(data["key"])
+    #         return False
 
-        # if the signing key is set to inactive
-        if not signing_key.active:
-            return False
+    #     # if the signing key is set to inactive
+    #     if not signing_key.active:
+    #         return False
 
-        # Convert scope to a list if it's a string
-        if isinstance(scope, str):
-            scope = [scope]
+    #     # Convert scope to a list if it's a string
+    #     if isinstance(scope, str):
+    #         scope = [scope]
 
-        # if the signing key's scope doesn't match any of the required scopes
-        if not set(scope).intersection(set(signing_key.scope)):
-            return False
+    #     # if the signing key's scope doesn't match any of the required scopes
+    #     if not set(scope).intersection(set(signing_key.scope)):
+    #         return False
 
-        return True
+    #     return True

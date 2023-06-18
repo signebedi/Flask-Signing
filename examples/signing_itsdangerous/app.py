@@ -1,12 +1,12 @@
 from flask import Flask, jsonify
-from flask_signing import Signatures
+from flask_signing import DangerousSignatures
 
 app = Flask(__name__)
 app.config['SQLALCHEMY_DATABASE_URI'] = 'sqlite://'  # Use your actual database URI
 app.secret_key = "Your_Key_Here"
 
 with app.app_context():
-    signatures = Signatures(app, byte_len=24, rate_limiting=True)
+    signatures = DangerousSignatures(app, byte_len=24, rate_limiting=True)
 
 
 @app.route('/sign')
@@ -56,6 +56,7 @@ def rotate_keys(time_until):
             return 'Failed to rotate keys', 400
     except Exception as e:
         return str(e), 500
+
 
 if __name__=="__main__":
     app.run(debug=True)
