@@ -34,6 +34,8 @@ from sqlalchemy import func, literal
 from sqlalchemy.exc import SQLAlchemyError
 from flask_sqlalchemy import SQLAlchemy
 from typing import Union, List, Dict, Any
+from itsdangerous import URLSafeTimedSerializer
+
 
 class RateLimitExceeded(Exception):
     &#34;&#34;&#34;
@@ -66,16 +68,13 @@ class Signatures:
             rate_limiting_max_requests (int, optional): Maximum allowed requests per time period.
             rate_limiting_period (datetime.timedelta, optional): Time period for rate limiting. Defaults to 1 hour.
         &#34;&#34;&#34;
-        with app.app_context():
-            if db is not None:
-                self.db = db
-            else:
-                self.db = SQLAlchemy(app)
-
-            self.db.create_all()  # this will create all necessary tables
-
+        if db is not None:
+            self.db = db
             self.Signing = self.get_model()
-
+        else:
+            self.db = SQLAlchemy(app)
+            self.Signing = self.get_model()
+            self.db.create_all()  # this will create all necessary tables
 
         self.byte_len = byte_len
 
@@ -323,9 +322,7 @@ class Signatures:
     def get_model(self):
 
         &#34;&#34;&#34;
-        Generate an instance of the Signing class, which represents the Signing table in the database.
-
-        Each instance of this class represents a row of data in the database table.
+        Return a single instance of the Signing class, which represents the Signing table in the database.
 
         Attributes:
             signature (str): The primary key of the Signing table. This field is unique for each entry.
@@ -531,7 +528,107 @@ class Signatures:
             # print(f&#34;An unexpected error occurred: {e}&#34;)
             return False
 
-        return new_key</code></pre>
+        return new_key
+
+
+class DangerousSignatures(Signatures):
+
+    &#34;&#34;&#34;
+    The DangerousSignatures class handles operations related to the creation, management, 
+    and validation of signing keys in the database using the itsdangerous library.
+    &#34;&#34;&#34;
+    
+    def __init__(self, app, secret_key:str=None, salt:str=None, *args, **kwargs):
+        &#34;&#34;&#34;
+        Initializes a new instance of the DangerousSignatures class.
+
+        Args:
+            app (Flask): A flask object to contain the context for database interactions. 
+            secret_key (str, optional): Value to use as a secret key. Defaults to the app.secret_key.
+            salt (str, optional): Value to use as the salt. Defaults to flask-signing.
+
+        &#34;&#34;&#34;
+        self.app = app
+        super().__init__(self.app, *args, **kwargs)
+        self.secret_key = secret_key or self.app.secret_key
+        self.salt = salt or &#39;flask-signing&#39;
+        self.serializer = URLSafeTimedSerializer(self.secret_key)
+
+
+    def generate_key(self, additional_data: dict = None):
+        &#34;&#34;&#34;
+        Overrides the parent generate_key method to use itsdangerous for key generation.
+
+        Args:
+            additional_data (dict, optional): Additional data to be included in the token. Defaults to None.
+
+        Returns:
+            str: The generated signing key.
+        &#34;&#34;&#34;
+        data = {&#34;key&#34;: secrets.token_urlsafe(self.byte_len)}
+
+        # If additional_data is provided, update the data dictionary
+        if additional_data is not None:
+            data.update(additional_data)
+
+        return self.serializer.dumps(data)
+
+    # def check_key(self, signature, scope):
+    #     &#34;&#34;&#34;
+    #     Checks the validity of a given signing key against a specific scope.
+
+    #     This function checks if the signing key exists, if it is active, if it has not expired,
+    #     and if its scope matches the provided scope. If all these conditions are met, the function
+    #     returns True, otherwise, it returns False.
+
+    #     Args:
+    #         signature (str): The signing key to be verified.
+    #         scope (str): The scope against which the signing key will be validated.
+
+    #     Returns:
+    #         bool: True if the signing key is valid and False otherwise.
+    #     &#34;&#34;&#34;
+
+    #     Signing = self.get_model()
+
+    #     # try to decode the signature using the serializer
+    #     try:
+    #         data = self.serializer.loads(signature)
+
+    #         # if the signature doesn&#39;t contain a key, it&#39;s invalid
+    #         if &#34;key&#34; not in data:
+    #             return False
+
+    #         signing_key = Signing.query.filter_by(signature=data[&#34;key&#34;]).first()
+
+    #     except (itsdangerous.BadSignature, itsdangerous.SignatureExpired):
+    #         return False  # if the signature cannot be decoded or is expired, it&#39;s invalid
+    #     except Exception as e:
+    #         print(f&#34;Unexpected error while decoding signature: {e}&#34;)
+    #         return False
+
+    #     # if the key doesn&#39;t exist
+    #     if not signing_key:
+    #         return False
+
+    #     # if the signing key&#39;s expiration time has passed
+    #     if signing_key.expiration &lt; datetime.datetime.utcnow():
+    #         self.expire_key(data[&#34;key&#34;])
+    #         return False
+
+    #     # if the signing key is set to inactive
+    #     if not signing_key.active:
+    #         return False
+
+    #     # Convert scope to a list if it&#39;s a string
+    #     if isinstance(scope, str):
+    #         scope = [scope]
+
+    #     # if the signing key&#39;s scope doesn&#39;t match any of the required scopes
+    #     if not set(scope).intersection(set(signing_key.scope)):
+    #         return False
+
+    #     return True</code></pre>
 </details>
 </section>
 <section>
@@ -543,6 +640,189 @@ class Signatures:
 <section>
 <h2 class="section-title" id="header-classes">Classes</h2>
 <dl>
+<dt id="flask_signing.DangerousSignatures"><code class="flex name class">
+<span>class <span class="ident">DangerousSignatures</span></span>
+<span>(</span><span>app, secret_key: str = None, salt: str = None, *args, **kwargs)</span>
+</code></dt>
+<dd>
+<div class="desc"><p>The DangerousSignatures class handles operations related to the creation, management,
+and validation of signing keys in the database using the itsdangerous library.</p>
+<p>Initializes a new instance of the DangerousSignatures class.</p>
+<h2 id="args">Args</h2>
+<dl>
+<dt><strong><code>app</code></strong> :&ensp;<code>Flask</code></dt>
+<dd>A flask object to contain the context for database interactions. </dd>
+<dt><strong><code>secret_key</code></strong> :&ensp;<code>str</code>, optional</dt>
+<dd>Value to use as a secret key. Defaults to the app.secret_key.</dd>
+<dt><strong><code>salt</code></strong> :&ensp;<code>str</code>, optional</dt>
+<dd>Value to use as the salt. Defaults to flask-signing.</dd>
+</dl></div>
+<details class="source">
+<summary>
+<span>Expand source code</span>
+</summary>
+<pre><code class="python">class DangerousSignatures(Signatures):
+
+    &#34;&#34;&#34;
+    The DangerousSignatures class handles operations related to the creation, management, 
+    and validation of signing keys in the database using the itsdangerous library.
+    &#34;&#34;&#34;
+    
+    def __init__(self, app, secret_key:str=None, salt:str=None, *args, **kwargs):
+        &#34;&#34;&#34;
+        Initializes a new instance of the DangerousSignatures class.
+
+        Args:
+            app (Flask): A flask object to contain the context for database interactions. 
+            secret_key (str, optional): Value to use as a secret key. Defaults to the app.secret_key.
+            salt (str, optional): Value to use as the salt. Defaults to flask-signing.
+
+        &#34;&#34;&#34;
+        self.app = app
+        super().__init__(self.app, *args, **kwargs)
+        self.secret_key = secret_key or self.app.secret_key
+        self.salt = salt or &#39;flask-signing&#39;
+        self.serializer = URLSafeTimedSerializer(self.secret_key)
+
+
+    def generate_key(self, additional_data: dict = None):
+        &#34;&#34;&#34;
+        Overrides the parent generate_key method to use itsdangerous for key generation.
+
+        Args:
+            additional_data (dict, optional): Additional data to be included in the token. Defaults to None.
+
+        Returns:
+            str: The generated signing key.
+        &#34;&#34;&#34;
+        data = {&#34;key&#34;: secrets.token_urlsafe(self.byte_len)}
+
+        # If additional_data is provided, update the data dictionary
+        if additional_data is not None:
+            data.update(additional_data)
+
+        return self.serializer.dumps(data)
+
+    # def check_key(self, signature, scope):
+    #     &#34;&#34;&#34;
+    #     Checks the validity of a given signing key against a specific scope.
+
+    #     This function checks if the signing key exists, if it is active, if it has not expired,
+    #     and if its scope matches the provided scope. If all these conditions are met, the function
+    #     returns True, otherwise, it returns False.
+
+    #     Args:
+    #         signature (str): The signing key to be verified.
+    #         scope (str): The scope against which the signing key will be validated.
+
+    #     Returns:
+    #         bool: True if the signing key is valid and False otherwise.
+    #     &#34;&#34;&#34;
+
+    #     Signing = self.get_model()
+
+    #     # try to decode the signature using the serializer
+    #     try:
+    #         data = self.serializer.loads(signature)
+
+    #         # if the signature doesn&#39;t contain a key, it&#39;s invalid
+    #         if &#34;key&#34; not in data:
+    #             return False
+
+    #         signing_key = Signing.query.filter_by(signature=data[&#34;key&#34;]).first()
+
+    #     except (itsdangerous.BadSignature, itsdangerous.SignatureExpired):
+    #         return False  # if the signature cannot be decoded or is expired, it&#39;s invalid
+    #     except Exception as e:
+    #         print(f&#34;Unexpected error while decoding signature: {e}&#34;)
+    #         return False
+
+    #     # if the key doesn&#39;t exist
+    #     if not signing_key:
+    #         return False
+
+    #     # if the signing key&#39;s expiration time has passed
+    #     if signing_key.expiration &lt; datetime.datetime.utcnow():
+    #         self.expire_key(data[&#34;key&#34;])
+    #         return False
+
+    #     # if the signing key is set to inactive
+    #     if not signing_key.active:
+    #         return False
+
+    #     # Convert scope to a list if it&#39;s a string
+    #     if isinstance(scope, str):
+    #         scope = [scope]
+
+    #     # if the signing key&#39;s scope doesn&#39;t match any of the required scopes
+    #     if not set(scope).intersection(set(signing_key.scope)):
+    #         return False
+
+    #     return True</code></pre>
+</details>
+<h3>Ancestors</h3>
+<ul class="hlist">
+<li><a title="flask_signing.Signatures" href="#flask_signing.Signatures">Signatures</a></li>
+</ul>
+<h3>Methods</h3>
+<dl>
+<dt id="flask_signing.DangerousSignatures.generate_key"><code class="name flex">
+<span>def <span class="ident">generate_key</span></span>(<span>self, additional_data: dict = None)</span>
+</code></dt>
+<dd>
+<div class="desc"><p>Overrides the parent generate_key method to use itsdangerous for key generation.</p>
+<h2 id="args">Args</h2>
+<dl>
+<dt><strong><code>additional_data</code></strong> :&ensp;<code>dict</code>, optional</dt>
+<dd>Additional data to be included in the token. Defaults to None.</dd>
+</dl>
+<h2 id="returns">Returns</h2>
+<dl>
+<dt><code>str</code></dt>
+<dd>The generated signing key.</dd>
+</dl></div>
+<details class="source">
+<summary>
+<span>Expand source code</span>
+</summary>
+<pre><code class="python">def generate_key(self, additional_data: dict = None):
+    &#34;&#34;&#34;
+    Overrides the parent generate_key method to use itsdangerous for key generation.
+
+    Args:
+        additional_data (dict, optional): Additional data to be included in the token. Defaults to None.
+
+    Returns:
+        str: The generated signing key.
+    &#34;&#34;&#34;
+    data = {&#34;key&#34;: secrets.token_urlsafe(self.byte_len)}
+
+    # If additional_data is provided, update the data dictionary
+    if additional_data is not None:
+        data.update(additional_data)
+
+    return self.serializer.dumps(data)</code></pre>
+</details>
+</dd>
+</dl>
+<h3>Inherited members</h3>
+<ul class="hlist">
+<li><code><b><a title="flask_signing.Signatures" href="#flask_signing.Signatures">Signatures</a></b></code>:
+<ul class="hlist">
+<li><code><a title="flask_signing.Signatures.check_key" href="#flask_signing.Signatures.check_key">check_key</a></code></li>
+<li><code><a title="flask_signing.Signatures.expire_key" href="#flask_signing.Signatures.expire_key">expire_key</a></code></li>
+<li><code><a title="flask_signing.Signatures.get_all" href="#flask_signing.Signatures.get_all">get_all</a></code></li>
+<li><code><a title="flask_signing.Signatures.get_model" href="#flask_signing.Signatures.get_model">get_model</a></code></li>
+<li><code><a title="flask_signing.Signatures.query_keys" href="#flask_signing.Signatures.query_keys">query_keys</a></code></li>
+<li><code><a title="flask_signing.Signatures.request_limiter" href="#flask_signing.Signatures.request_limiter">request_limiter</a></code></li>
+<li><code><a title="flask_signing.Signatures.rotate_key" href="#flask_signing.Signatures.rotate_key">rotate_key</a></code></li>
+<li><code><a title="flask_signing.Signatures.rotate_keys" href="#flask_signing.Signatures.rotate_keys">rotate_keys</a></code></li>
+<li><code><a title="flask_signing.Signatures.verify_key" href="#flask_signing.Signatures.verify_key">verify_key</a></code></li>
+<li><code><a title="flask_signing.Signatures.write_key" href="#flask_signing.Signatures.write_key">write_key</a></code></li>
+</ul>
+</li>
+</ul>
+</dd>
 <dt id="flask_signing.RateLimitExceeded"><code class="flex name class">
 <span>class <span class="ident">RateLimitExceeded</span></span>
 <span>(</span><span>*args, **kwargs)</span>
@@ -624,16 +904,13 @@ of signing keys in the database.</p>
             rate_limiting_max_requests (int, optional): Maximum allowed requests per time period.
             rate_limiting_period (datetime.timedelta, optional): Time period for rate limiting. Defaults to 1 hour.
         &#34;&#34;&#34;
-        with app.app_context():
-            if db is not None:
-                self.db = db
-            else:
-                self.db = SQLAlchemy(app)
-
-            self.db.create_all()  # this will create all necessary tables
-
+        if db is not None:
+            self.db = db
             self.Signing = self.get_model()
-
+        else:
+            self.db = SQLAlchemy(app)
+            self.Signing = self.get_model()
+            self.db.create_all()  # this will create all necessary tables
 
         self.byte_len = byte_len
 
@@ -881,9 +1158,7 @@ of signing keys in the database.</p>
     def get_model(self):
 
         &#34;&#34;&#34;
-        Generate an instance of the Signing class, which represents the Signing table in the database.
-
-        Each instance of this class represents a row of data in the database table.
+        Return a single instance of the Signing class, which represents the Signing table in the database.
 
         Attributes:
             signature (str): The primary key of the Signing table. This field is unique for each entry.
@@ -1091,6 +1366,10 @@ of signing keys in the database.</p>
 
         return new_key</code></pre>
 </details>
+<h3>Subclasses</h3>
+<ul class="hlist">
+<li><a title="flask_signing.DangerousSignatures" href="#flask_signing.DangerousSignatures">DangerousSignatures</a></li>
+</ul>
 <h3>Class variables</h3>
 <dl>
 <dt id="flask_signing.Signatures.request_limiter"><code class="name">var <span class="ident">request_limiter</span></code></dt>
@@ -1344,8 +1623,7 @@ If no keys are found, it returns an empty list.</p>
 <span>def <span class="ident">get_model</span></span>(<span>self)</span>
 </code></dt>
 <dd>
-<div class="desc"><p>Generate an instance of the Signing class, which represents the Signing table in the database.</p>
-<p>Each instance of this class represents a row of data in the database table.</p>
+<div class="desc"><p>Return a single instance of the Signing class, which represents the Signing table in the database.</p>
 <h2 id="attributes">Attributes</h2>
 <dl>
 <dt><strong><code>signature</code></strong> :&ensp;<code>str</code></dt>
@@ -1368,9 +1646,7 @@ If no keys are found, it returns an empty list.</p>
 <pre><code class="python">def get_model(self):
 
     &#34;&#34;&#34;
-    Generate an instance of the Signing class, which represents the Signing table in the database.
-
-    Each instance of this class represents a row of data in the database table.
+    Return a single instance of the Signing class, which represents the Signing table in the database.
 
     Attributes:
         signature (str): The primary key of the Signing table. This field is unique for each entry.
@@ -1799,6 +2075,12 @@ If not provided or equals 0, the expiration will be set to zero. Defaults to 1.<
 <ul id="index">
 <li><h3><a href="#header-classes">Classes</a></h3>
 <ul>
+<li>
+<h4><code><a title="flask_signing.DangerousSignatures" href="#flask_signing.DangerousSignatures">DangerousSignatures</a></code></h4>
+<ul class="">
+<li><code><a title="flask_signing.DangerousSignatures.generate_key" href="#flask_signing.DangerousSignatures.generate_key">generate_key</a></code></li>
+</ul>
+</li>
 <li>
 <h4><code><a title="flask_signing.RateLimitExceeded" href="#flask_signing.RateLimitExceeded">RateLimitExceeded</a></code></h4>
 </li>
