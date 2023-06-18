@@ -550,22 +550,27 @@ class DangerousSignatures(Signatures):
         &#34;&#34;&#34;
         self.app = app
         super().__init__(self.app, *args, **kwargs)
+        
         self.secret_key = secret_key or self.app.secret_key
         self.salt = salt or &#39;flask-signing&#39;
         self.serializer = URLSafeTimedSerializer(self.secret_key)
 
 
-    def generate_key(self, additional_data: dict = None):
+    def generate_key(self, additional_data: dict = None, length:int=None) -&gt; str:
         &#34;&#34;&#34;
         Overrides the parent generate_key method to use itsdangerous for key generation.
 
         Args:
             additional_data (dict, optional): Additional data to be included in the token. Defaults to None.
+            length (int, optional): The length of the generated signing key. Defaults to None, in which case the byte_len is used.
 
         Returns:
             str: The generated signing key.
         &#34;&#34;&#34;
-        data = {&#34;key&#34;: secrets.token_urlsafe(self.byte_len)}
+        if not length: 
+            length = self.byte_len
+
+        data = {&#34;key&#34;: secrets.token_urlsafe(length)}
 
         # If additional_data is provided, update the data dictionary
         if additional_data is not None:
@@ -680,22 +685,27 @@ and validation of signing keys in the database using the itsdangerous library.</
         &#34;&#34;&#34;
         self.app = app
         super().__init__(self.app, *args, **kwargs)
+        
         self.secret_key = secret_key or self.app.secret_key
         self.salt = salt or &#39;flask-signing&#39;
         self.serializer = URLSafeTimedSerializer(self.secret_key)
 
 
-    def generate_key(self, additional_data: dict = None):
+    def generate_key(self, additional_data: dict = None, length:int=None) -&gt; str:
         &#34;&#34;&#34;
         Overrides the parent generate_key method to use itsdangerous for key generation.
 
         Args:
             additional_data (dict, optional): Additional data to be included in the token. Defaults to None.
+            length (int, optional): The length of the generated signing key. Defaults to None, in which case the byte_len is used.
 
         Returns:
             str: The generated signing key.
         &#34;&#34;&#34;
-        data = {&#34;key&#34;: secrets.token_urlsafe(self.byte_len)}
+        if not length: 
+            length = self.byte_len
+
+        data = {&#34;key&#34;: secrets.token_urlsafe(length)}
 
         # If additional_data is provided, update the data dictionary
         if additional_data is not None:
@@ -767,7 +777,7 @@ and validation of signing keys in the database using the itsdangerous library.</
 <h3>Methods</h3>
 <dl>
 <dt id="flask_signing.DangerousSignatures.generate_key"><code class="name flex">
-<span>def <span class="ident">generate_key</span></span>(<span>self, additional_data: dict = None)</span>
+<span>def <span class="ident">generate_key</span></span>(<span>self, additional_data: dict = None, length: int = None) ‑> str</span>
 </code></dt>
 <dd>
 <div class="desc"><p>Overrides the parent generate_key method to use itsdangerous for key generation.</p>
@@ -775,6 +785,8 @@ and validation of signing keys in the database using the itsdangerous library.</
 <dl>
 <dt><strong><code>additional_data</code></strong> :&ensp;<code>dict</code>, optional</dt>
 <dd>Additional data to be included in the token. Defaults to None.</dd>
+<dt><strong><code>length</code></strong> :&ensp;<code>int</code>, optional</dt>
+<dd>The length of the generated signing key. Defaults to None, in which case the byte_len is used.</dd>
 </dl>
 <h2 id="returns">Returns</h2>
 <dl>
@@ -785,17 +797,21 @@ and validation of signing keys in the database using the itsdangerous library.</
 <summary>
 <span>Expand source code</span>
 </summary>
-<pre><code class="python">def generate_key(self, additional_data: dict = None):
+<pre><code class="python">def generate_key(self, additional_data: dict = None, length:int=None) -&gt; str:
     &#34;&#34;&#34;
     Overrides the parent generate_key method to use itsdangerous for key generation.
 
     Args:
         additional_data (dict, optional): Additional data to be included in the token. Defaults to None.
+        length (int, optional): The length of the generated signing key. Defaults to None, in which case the byte_len is used.
 
     Returns:
         str: The generated signing key.
     &#34;&#34;&#34;
-    data = {&#34;key&#34;: secrets.token_urlsafe(self.byte_len)}
+    if not length: 
+        length = self.byte_len
+
+    data = {&#34;key&#34;: secrets.token_urlsafe(length)}
 
     # If additional_data is provided, update the data dictionary
     if additional_data is not None:
