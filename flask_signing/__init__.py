@@ -363,16 +363,7 @@ class Signatures:
             for s in scope:
                 # https://stackoverflow.com/a/44250678/13301284
                 query = query.filter(Signing.scope.comparator.contains(s))
-
-                # https://stackoverflow.com/a/39470478/13301284
-                # query = query.filter(func.json_contains(Signing.scope, s) == 1)
-                # query = query.filter(literal(s).bool_op('MEMBER OF')(Signing.scope.self_group()))
                 
-            # query = query.filter(Signing.scope.in_(scope))
-            
-        # if scope:
-        #     query = query.filter(Signing.scope == scope)
-
         if email:
             query = query.filter(Signing.email == email)
 
@@ -417,12 +408,6 @@ class Signatures:
                 Signing.expiration <= (datetime.datetime.utcnow() + datetime.timedelta(hours=time_until)),
                 Signing.active == True
             )
-
-            # if scope is not None:
-            #     if isinstance(scope, list):
-            #         query = query.filter(Signing.scope.in_(scope))
-            #     else:
-            #         query = query.filter_by(scope=scope)
 
             # Convert scope to a list if it's a string
             if isinstance(scope, str):
@@ -549,60 +534,3 @@ class DangerousSignatures(Signatures):
             data.update(additional_data)
 
         return self.serializer.dumps(data)
-
-    # def check_key(self, signature, scope):
-    #     """
-    #     Checks the validity of a given signing key against a specific scope.
-
-    #     This function checks if the signing key exists, if it is active, if it has not expired,
-    #     and if its scope matches the provided scope. If all these conditions are met, the function
-    #     returns True, otherwise, it returns False.
-
-    #     Args:
-    #         signature (str): The signing key to be verified.
-    #         scope (str): The scope against which the signing key will be validated.
-
-    #     Returns:
-    #         bool: True if the signing key is valid and False otherwise.
-    #     """
-
-    #     Signing = self.get_model()
-
-    #     # try to decode the signature using the serializer
-    #     try:
-    #         data = self.serializer.loads(signature)
-
-    #         # if the signature doesn't contain a key, it's invalid
-    #         if "key" not in data:
-    #             return False
-
-    #         signing_key = Signing.query.filter_by(signature=data["key"]).first()
-
-    #     except (itsdangerous.BadSignature, itsdangerous.SignatureExpired):
-    #         return False  # if the signature cannot be decoded or is expired, it's invalid
-    #     except Exception as e:
-    #         print(f"Unexpected error while decoding signature: {e}")
-    #         return False
-
-    #     # if the key doesn't exist
-    #     if not signing_key:
-    #         return False
-
-    #     # if the signing key's expiration time has passed
-    #     if signing_key.expiration < datetime.datetime.utcnow():
-    #         self.expire_key(data["key"])
-    #         return False
-
-    #     # if the signing key is set to inactive
-    #     if not signing_key.active:
-    #         return False
-
-    #     # Convert scope to a list if it's a string
-    #     if isinstance(scope, str):
-    #         scope = [scope]
-
-    #     # if the signing key's scope doesn't match any of the required scopes
-    #     if not set(scope).intersection(set(signing_key.scope)):
-    #         return False
-
-    #     return True
