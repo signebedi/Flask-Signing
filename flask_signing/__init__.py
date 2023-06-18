@@ -522,22 +522,27 @@ class DangerousSignatures(Signatures):
         """
         self.app = app
         super().__init__(self.app, *args, **kwargs)
+        
         self.secret_key = secret_key or self.app.secret_key
         self.salt = salt or 'flask-signing'
         self.serializer = URLSafeTimedSerializer(self.secret_key)
 
 
-    def generate_key(self, additional_data: dict = None):
+    def generate_key(self, additional_data: dict = None, length:int=None) -> str:
         """
         Overrides the parent generate_key method to use itsdangerous for key generation.
 
         Args:
             additional_data (dict, optional): Additional data to be included in the token. Defaults to None.
+            length (int, optional): The length of the generated signing key. Defaults to None, in which case the byte_len is used.
 
         Returns:
             str: The generated signing key.
         """
-        data = {"key": secrets.token_urlsafe(self.byte_len)}
+        if not length: 
+            length = self.byte_len
+
+        data = {"key": secrets.token_urlsafe(length)}
 
         # If additional_data is provided, update the data dictionary
         if additional_data is not None:
