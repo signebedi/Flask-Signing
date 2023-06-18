@@ -1,7 +1,7 @@
 import os, datetime, unittest, time
 from flask import Flask
 from flask_sqlalchemy import SQLAlchemy
-from flask_signing import Signatures, RateLimitExceeded
+from flask_signing import Signatures, DangerousSignatures, RateLimitExceeded
 
 class TestFlaskSigning(unittest.TestCase):
 
@@ -245,6 +245,51 @@ class TestFlaskSigning(unittest.TestCase):
             # Validate the key again, should return True
             self.assertTrue(self.signatures.verify_key(signature, scope))
 
+
+class TestDangerousFlaskSigning(TestFlaskSigning):
+
+
+
+    def setUp(self):
+        """
+        Set up testing environment for DangerousSignatures.
+        """
+
+        self.app = Flask(__name__)
+        self.app.config['SQLALCHEMY_DATABASE_URI'] = 'sqlite:///:memory:'
+        self.app.config['SECRET_KEY'] = 'Your_Key_Here'
+        self.app.config['TESTING'] = True
+        
+
+        with self.app.app_context():
+            self.signatures = DangerousSignatures(app=self.app)
+            self.db = self.signatures.db
+            self.db.create_all()
+
+    def test_generate_key(self):
+        """
+        Test if the generate_key method returns a correctly serialized string,
+        for keys of various byte lengths
+        """
+
+        for i in range(10, 256):
+            with self.app.app_context():
+                key = self.signatures.generate_key(length=i)
+                data = self.signatures.serializer.loads(key)
+            # self.assertEqual(len(data['key']), i)
+            self.assertTrue(i < len(data['key']) < 1.6*i)
+            self.assertIsInstance(key, str)
+
+    def test_serializer(self):
+        """
+        Test if the serializer properly serializes and deserializes data
+        """
+
+        with self.app.app_context():
+            data = {'key': 'test_data'}
+            serialized_data = self.signatures.serializer.dumps(data)
+            deserialized_data = self.signatures.serializer.loads(serialized_data)
+        self.assertEqual(data, deserialized_data)
 
 if __name__ == '__main__':
     unittest.main()
