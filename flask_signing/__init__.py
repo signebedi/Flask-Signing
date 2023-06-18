@@ -6,6 +6,8 @@ from sqlalchemy import func, literal
 from sqlalchemy.exc import SQLAlchemyError
 from flask_sqlalchemy import SQLAlchemy
 from typing import Union, List, Dict, Any
+from itsdangerous import URLSafeTimedSerializer
+
 
 class RateLimitExceeded(Exception):
     """
@@ -292,9 +294,7 @@ class Signatures:
     def get_model(self):
 
         """
-        Generate an instance of the Signing class, which represents the Signing table in the database.
-
-        Each instance of this class represents a row of data in the database table.
+        Return a single instance of the Signing class, which represents the Signing table in the database.
 
         Attributes:
             signature (str): The primary key of the Signing table. This field is unique for each entry.
@@ -501,3 +501,103 @@ class Signatures:
             return False
 
         return new_key
+
+
+class DangerousSignatures(Signatures):
+
+    """
+    The DangerousSignatures class handles operations related to the creation, management, 
+    and validation of signing keys in the database using the itsdangerous library.
+    """
+    
+    def __init__(self, app, secret_key:str=None, salt:str=None, *args, **kwargs):
+        """
+        Initializes a new instance of the DangerousSignatures class.
+
+        Args:
+            app (Flask): A flask object to contain the context for database interactions. 
+            secret_key (str, optional): Value to use as a secret key. Defaults to the app.secret_key.
+            salt (str, optional): Value to use as the salt. Defaults to flask-signing.
+
+        """
+        self.app = app
+        super().__init__(self.app, *args, **kwargs)
+        self.secret_key = secret_key or self.app.secret_key
+        self.salt = salt or 'flask-signing'
+        self.serializer = URLSafeTimedSerializer(self.secret_key)
+
+
+    def generate_key(self, additional_data: dict = None):
+        """
+        Overrides the parent generate_key method to use itsdangerous for key generation.
+
+        Args:
+            additional_data (dict, optional): Additional data to be included in the token. Defaults to None.
+
+        Returns:
+            str: The generated signing key.
+        """
+        data = {"key": secrets.token_urlsafe(self.byte_len)}
+
+        # If additional_data is provided, update the data dictionary
+        if additional_data is not None:
+            data.update(additional_data)
+
+        return self.serializer.dumps(data)
+
+    def check_key(self, signature, scope):
+        """
+        Checks the validity of a given signing key against a specific scope.
+
+        This function checks if the signing key exists, if it is active, if it has not expired,
+        and if its scope matches the provided scope. If all these conditions are met, the function
+        returns True, otherwise, it returns False.
+
+        Args:
+            signature (str): The signing key to be verified.
+            scope (str): The scope against which the signing key will be validated.
+
+        Returns:
+            bool: True if the signing key is valid and False otherwise.
+        """
+
+        Signing = self.get_model()
+
+        # try to decode the signature using the serializer
+        try:
+            data = self.serializer.loads(signature)
+
+            # if the signature doesn't contain a key, it's invalid
+            if "key" not in data:
+                return False
+
+            signing_key = Signing.query.filter_by(signature=data["key"]).first()
+
+        except (itsdangerous.BadSignature, itsdangerous.SignatureExpired):
+            return False  # if the signature cannot be decoded or is expired, it's invalid
+        except Exception as e:
+            print(f"Unexpected error while decoding signature: {e}")
+            return False
+
+        # if the key doesn't exist
+        if not signing_key:
+            return False
+
+        # if the signing key's expiration time has passed
+        if signing_key.expiration < datetime.datetime.utcnow():
+            self.expire_key(data["key"])
+            return False
+
+        # if the signing key is set to inactive
+        if not signing_key.active:
+            return False
+
+        # Convert scope to a list if it's a string
+        if isinstance(scope, str):
+            scope = [scope]
+
+        # if the signing key's scope doesn't match any of the required scopes
+        if not set(scope).intersection(set(signing_key.scope)):
+            return False
+
+        return True
