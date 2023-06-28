@@ -1,0 +1,18 @@
+{% extends 'base.html.jinja' %}
+
+{%block content%}
+<h4>Get API Key</h4>
+<form method="POST">
+            <fieldset class="form-group">            
+                <label for="email">Email:</label>
+                <input class="form-control" type="email" id="email" name="email" required>
+            </fieldset>
+
+            <fieldset class="form-group">       
+                <br/>     
+                <button class="btn btn-secondary form-control" type="submit">Create API Key</button>
+            </fieldset>
+
+</form>
+
+{%endblock%}
