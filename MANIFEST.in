@@ -1,2 +1,2 @@
-include requirements.txt
+include requirements/base.txt
 include README.md

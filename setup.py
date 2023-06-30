@@ -1,5 +1,5 @@
+import os
 from setuptools import setup, find_packages
-# from flask_signing._metadata import __version__ as version
 
 def read_version():
     with open('flask_signing/__metadata__.py', 'r') as f:
@@ -18,9 +18,9 @@ version = read_version()
 with open("README.md", "r", encoding="utf-8") as fh:
     long_description = fh.read()
 
-requirements_file = os.getenv('REQUIREMENTS', 'requirements.txt')
+requirements_file = os.getenv('REQUIREMENTS', 'requirements/base.txt')
 
-# Read requirements.txt for install_requires
+# Read requirements/base.txt for install_requires
 with open(requirements_file, encoding="utf-8") as f:
     install_requires = f.read().splitlines()
     
