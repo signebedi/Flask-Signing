@@ -18,10 +18,12 @@ version = read_version()
 with open("README.md", "r", encoding="utf-8") as fh:
     long_description = fh.read()
 
-# # Read requirements.txt for install_requires
-with open('requirements.txt', encoding="utf-8") as f:
-    install_requires = f.read().splitlines()
+requirements_file = os.getenv('REQUIREMENTS', 'requirements.txt')
 
+# Read requirements.txt for install_requires
+with open(requirements_file, encoding="utf-8") as f:
+    install_requires = f.read().splitlines()
+    
 setup(
     name='flask_signing',
     version=version,
