@@ -1,2 +1,2 @@
-Flask<3.0.0
+Flask<4.0.0
 Flask-SQLAlchemy<4.0.0
