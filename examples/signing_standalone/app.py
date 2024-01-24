@@ -1,5 +1,5 @@
 from flask import Flask, jsonify
-from flask_signing import Signatures
+from flask_signing import Signatures, RateLimitExceeded
 
 app = Flask(__name__)
 app.config['SQLALCHEMY_DATABASE_URI'] = 'sqlite://'  # Use your actual database URI
@@ -16,8 +16,12 @@ def sign():
 
 @app.route('/verify/<key>')
 def verify(key):
-    valid = signatures.verify_key(signature=key, scope='test')
-    return f'Key valid: {valid}'
+    try:
+        valid = signatures.verify_key(signature=key, scope='test')
+        return f'Key valid: {valid}'
+    except RateLimitExceeded:
+        return "Rate limit exceeded"
+
 
 @app.route('/expire/<key>')
 def expire(key):

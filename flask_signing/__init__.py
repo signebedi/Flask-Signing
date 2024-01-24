@@ -21,6 +21,52 @@ class RateLimitExceeded(Exception):
     """
     pass
 
+class KeyDoesNotExist(Exception):
+    """
+    An exception that is raised when a requested signing key does not exist in the 
+    system. This could happen if the key has been deleted, never created, or if there 
+    is a mismatch in the key identifier used for lookup.
+
+    This exception indicates that the operation cannot proceed without a valid signing 
+    key, and the calling code should catch this exception to handle these cases 
+    appropriately.
+    """
+    pass
+
+class KeyExpired(Exception):
+    """
+    An exception that is raised when the signing key's expiration time has passed
+    or the key is marked inactive. Expired keys are considered invalid for crypto
+    graphic operations.
+
+    This exception helps in enforcing security protocols where only active keys should 
+    be used, allowing the calling code to handle such situations accordingly, such as 
+    notifying the user or selecting an alternate key.
+    """
+    pass
+
+class ScopeMismatch(Exception):
+    """
+    An exception that is raised when the scope associated with the signing key does not 
+    match any of the required scopes specified in the operation.
+
+    This exception is crucial for maintaining scope-based access control, ensuring that 
+    operations are performed only with keys that have the appropriate scope. The calling 
+    code should handle this exception to enforce correct scope usage.
+    """
+    pass
+
+class AlreadyRotated(Exception):
+    """
+    An exception that is raised when there is an attempt to rotate an already-rotated
+    key.
+
+    This exception will help prevent keys that have gone stale from being rotated and 
+    producing further children keys.
+    """
+    pass
+
+
 class Signatures:
     """
     The Signatures class handles operations related to the creation, management, and validation 
@@ -95,23 +141,22 @@ class Signatures:
                 signing_key = Signing.query.filter_by(signature=signature).first()
 
                 # If the key does not exist
-                if not signing_key:
-                    return False
+                if signing_key:
 
-                # Reset request_count if period has passed since last_request_time
-                if datetime.datetime.utcnow() - signing_key.last_request_time >= instance.rate_limiting_period:
-                    signing_key.request_count = 0
+                    # Reset request_count if period has passed since last_request_time
+                    if datetime.datetime.utcnow() - signing_key.last_request_time >= instance.rate_limiting_period:
+                        signing_key.request_count = 0
+                        signing_key.last_request_time = datetime.datetime.utcnow()
+
+                    # Check if request_count exceeds max_requests
+                    if signing_key.request_count >= instance.rate_limiting_max_requests:
+                        raise RateLimitExceeded("Too many requests. Please try again later.")
+
+                    # If limit not exceeded, increment request_count and update last_request_time
+                    signing_key.request_count += 1
                     signing_key.last_request_time = datetime.datetime.utcnow()
 
-                # Check if request_count exceeds max_requests
-                if signing_key.request_count >= instance.rate_limiting_max_requests:
-                    raise RateLimitExceeded("Too many requests. Please try again later.")
-
-                # If limit not exceeded, increment request_count and update last_request_time
-                signing_key.request_count += 1
-                signing_key.last_request_time = datetime.datetime.utcnow()
-
-                instance.db.session.commit()
+                    instance.db.session.commit()
 
                 return self.func(instance, signature, *args, **kwargs)
             return wrapper
@@ -202,7 +247,7 @@ class Signatures:
 
         signing_key = Signing.query.filter_by(signature=key).first()
         if not signing_key:
-            return False
+            raise KeyDoesNotExist("This key does not exist.")
 
         # This will disable the key
         signing_key.active = False
@@ -235,13 +280,14 @@ class Signatures:
             the maximum allowed within the specified time period.
         """
 
-        try:
-            valid = self.check_key(signature, scope)
-        except RateLimitExceeded as e:
-            print(e)  # Or handle the exception in some other way
-            return False
+        # try:
+        #     valid = self.check_key(signature, scope)
+        # except RateLimitExceeded as e:
+        #     print(e)  # Or handle the exception in some other way
+        #     return False
+        # return valid
 
-        return valid
+        return self.check_key(signature, scope)
 
     def check_key(self, signature, scope):
         """
@@ -266,16 +312,19 @@ class Signatures:
 
         # if the key doesn't exist
         if not signing_key:
-            return False
+            # return False
+            raise KeyDoesNotExist("This key does not exist.")
+
+        # if the signing key is set to inactive
+        if not signing_key.active:
+            # return False
+            raise KeyExpired("This key is no longer active.")
 
         # if the signing key's expiration time has passed
         if signing_key.expiration < datetime.datetime.utcnow():
             self.expire_key(signature)
-            return False
-
-        # if the signing key is set to inactive
-        if not signing_key.active:
-            return False
+            # return False
+            raise KeyExpired("This key is expired.")
 
         # Convert scope to a list if it's a string
         if isinstance(scope, str):
@@ -283,7 +332,7 @@ class Signatures:
 
         # if the signing key's scope doesn't match any of the required scopes
         if not set(scope).intersection(set(signing_key.scope)):
-            return False
+            raise ScopeMismatch("This key does not match the required scope.")
 
         # # if the signing key's scope doesn't match the required scope
         # if signing_key.scope != scope:
@@ -373,7 +422,7 @@ class Signatures:
         result = query.all()
 
         if not result:
-            return False
+            raise Exception("No results found for given parameters.")
 
         return [{'signature': key.signature, 'email': key.email, 'scope': key.scope, 'active': key.active, 'timestamp': key.timestamp, 'expiration': key.expiration, 'previous_key': key.previous_key, 'rotated': key.rotated} for key in result]
 
@@ -400,39 +449,28 @@ class Signatures:
         Returns:
             bool: operation succeeded/failed.
         """
-        try:
-            Signing = self.get_model()
+        Signing = self.get_model()
 
-            # get keys that will expire in the next time_until hours
-            query = Signing.query.filter(
-                Signing.expiration <= (datetime.datetime.utcnow() + datetime.timedelta(hours=time_until)),
-                Signing.active == True
-            )
+        # get keys that will expire in the next time_until hours
+        query = Signing.query.filter(
+            Signing.expiration <= (datetime.datetime.utcnow() + datetime.timedelta(hours=time_until)),
+            Signing.active == True
+        )
 
-            # Convert scope to a list if it's a string
-            if isinstance(scope, str):
-                scope = [scope]
+        # Convert scope to a list if it's a string
+        if isinstance(scope, str):
+            scope = [scope]
 
-            if scope:
+        if scope:
 
-                for s in scope:
-                    # https://stackoverflow.com/a/44250678/13301284
-                    query = query.filter(Signing.scope.comparator.contains(s))
+            for s in scope:
+                # https://stackoverflow.com/a/44250678/13301284
+                query = query.filter(Signing.scope.comparator.contains(s))
 
-            expiring_keys = query.all()
+        expiring_keys = query.all()
 
-            for key in expiring_keys:
-                self.rotate_key(key.signature)
-
-        except SQLAlchemyError as e:
-            # This will catch any SQLAlchemy related exceptions
-            print(f"An error occurred while rotating keys: {e}")
-            return False
-
-        except Exception as e:
-            # This will catch any other kind of unexpected exceptions
-            print(f"An unexpected error occurred: {e}")
-            return False
+        for key in expiring_keys:
+            self.rotate_key(key.signature)
 
         # We may need to potentially modify the return behavior to provide greater detail ... 
         # for example, a list of old keys mapped to their new keys and emails.
@@ -447,43 +485,35 @@ class Signatures:
         Returns:
             str: The new signing key.
         """
-        try:
-            Signing = self.get_model()
 
-            signing_key = Signing.query.filter_by(signature=key).first()
+        Signing = self.get_model()
 
-            if not signing_key:
-                raise ValueError("No such key exists")
+        signing_key = Signing.query.filter_by(signature=key).first()
 
-            if self.safe_mode and signing_key.rotated:
-                raise ValueError("Key has already been rotated")
+        if not signing_key:
+            raise KeyDoesNotExist("This key does not exist.")
 
-            if self.safe_mode and not signing_key.active:
-                raise ValueError("You cannot rotate a disabled key")
+        if self.safe_mode and signing_key.rotated:
+            raise AlreadyRotated("Key has already been rotated")
 
-            # Disable old key
-            signing_key.active = False
-            signing_key.rotated = True
-            self.db.session.flush()
+        if self.safe_mode and not signing_key.active:
+            raise KeyExpired("You cannot rotate a disabled key")
 
-            # Generate a new key with the same properties
-            new_key = self.write_key(
-                scope=signing_key.scope, 
-                expiration=expiration, 
-                active=True, 
-                email=signing_key.email,
-                previous_key=signing_key.signature,  # Assign old key's signature to the previous_key field of new key
-            )
-            
-            self.db.session.commit()
+        # Disable old key
+        signing_key.active = False
+        signing_key.rotated = True
+        self.db.session.flush()
 
-        except SQLAlchemyError as e:
-            # print(f"An error occurred while rotating the key {key}: {e}")
-            return False
-
-        except Exception as e:
-            # print(f"An unexpected error occurred: {e}")
-            return False
+        # Generate a new key with the same properties
+        new_key = self.write_key(
+            scope=signing_key.scope, 
+            expiration=expiration, 
+            active=True, 
+            email=signing_key.email,
+            previous_key=signing_key.signature,  # Assign old key's signature to the previous_key field of new key
+        )
+        
+        self.db.session.commit()
 
         return new_key
 
