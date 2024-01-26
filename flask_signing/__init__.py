@@ -5,7 +5,7 @@ from functools import wraps
 from sqlalchemy import func, literal
 from sqlalchemy.exc import SQLAlchemyError
 from flask_sqlalchemy import SQLAlchemy
-from typing import Union, List, Dict, Any
+from typing import Union, List, Dict, Any, Optional
 from itsdangerous import URLSafeTimedSerializer
 
 
@@ -178,7 +178,7 @@ class Signatures:
             length = self.byte_len
         return secrets.token_urlsafe(length)
 
-    def write_key(self, scope:str=None, expiration:int=1, active:bool=True, email:str=None, previous_key:str=None) -> str:
+    def write_key(self, scope:str=None, expiration:int=0, active:bool=True, email:str=None, previous_key:str=None) -> str:
         """
         Writes a newly generated signing key to the database.
 
@@ -187,7 +187,7 @@ class Signatures:
         Args:
             scope (str): The scope within which the signing key will be valid. Defaults to None.
             expiration (int, optional): The number of hours after which the signing key will expire. 
-                If not provided or equals 0, the expiration will be set to zero. Defaults to 1.
+                If not provided or equals 0, the expiration will be set to zero (no-expiry). Defaults to 0.
             active (bool, optional): The status of the signing key. Defaults to True.
             email (str, optional): The email associated with the signing key. Defaults to None.
             previous_key (str, optional): The previous key to associate with this key, in the case of key rotation. Defaults to None.
@@ -212,7 +212,9 @@ class Signatures:
                     'email':email.lower() if email else "", 
                     'active':active,
                     'rotated': False,
-                    'expiration':(datetime.datetime.utcnow() + datetime.timedelta(hours=expiration)) if expiration else 0,
+                    # If nothing is passed, set an absurdly-high expiry datetime
+                    'expiration':(datetime.datetime.utcnow() + datetime.timedelta(hours=expiration)) if expiration else datetime.datetime(9999, 12, 31, 23, 59, 59),
+                    'expiration_int':expiration,
                     'timestamp':datetime.datetime.utcnow(),
         }
 
@@ -365,6 +367,8 @@ class Signatures:
                 active = self.db.Column(self.db.Boolean)
                 timestamp = self.db.Column(self.db.DateTime, nullable=False, default=datetime.datetime.utcnow)
                 expiration = self.db.Column(self.db.DateTime, nullable=False, default=datetime.datetime.utcnow)
+                # A 0 expiration int means it will never expire
+                expiration_int = self.db.Column(self.db.Integer, nullable=False, default=0)
                 request_count = self.db.Column(self.db.Integer, default=0)
                 last_request_time = self.db.Column(self.db.DateTime, default=datetime.datetime.utcnow)
                 # previous_key = self.db.Column(self.db.String(1000), db.ForeignKey('signing.signature'))
@@ -483,7 +487,7 @@ class Signatures:
         # return True
         return key_list
 
-    def rotate_key(self, key: str, expiration:int=1) -> str:
+    def rotate_key(self, key: str, expiration:Optional[int]=None) -> str:
         """
         Replaces an active key with a new key with the same properties, and sets the old key as inactive.
         Args:
@@ -511,10 +515,16 @@ class Signatures:
         signing_key.rotated = True
         self.db.session.flush()
 
+
+        # If no expiration int is passed, we inherit the parent's
+        if expiration is None:
+            expiration = signing_key.expiration_int
+
         # Generate a new key with the same properties
         new_key = self.write_key(
-            scope=signing_key.scope, 
-            expiration=expiration, 
+            scope=signing_key.scope,
+            expiration=datetime.datetime.utcnow() + datetime.timedelta(hours=expiration) if expiration else datetime.datetime(9999, 12, 31, 23, 59, 59), 
+            expiration_int=expiration,
             active=True, 
             email=signing_key.email,
             previous_key=signing_key.signature,  # Assign old key's signature to the previous_key field of new key
