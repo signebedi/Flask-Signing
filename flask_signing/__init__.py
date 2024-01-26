@@ -523,8 +523,7 @@ class Signatures:
         # Generate a new key with the same properties
         new_key = self.write_key(
             scope=signing_key.scope,
-            expiration=datetime.datetime.utcnow() + datetime.timedelta(hours=expiration) if expiration else datetime.datetime(9999, 12, 31, 23, 59, 59), 
-            expiration_int=expiration,
+            expiration=expiration,
             active=True, 
             email=signing_key.email,
             previous_key=signing_key.signature,  # Assign old key's signature to the previous_key field of new key
