@@ -443,6 +443,32 @@ class Signatures:
         return [{'signature': key.signature, 'email': key.email, 'scope': key.scope, 'active': key.active, 'timestamp': key.timestamp, 'expiration': key.expiration, 'previous_key': key.previous_key, 'rotated': key.rotated} for key in self.get_model().query.all()]
 
 
+    def get_key(self, signature:str) -> Dict[str, Any]:
+
+        """
+        Query for a single key in the Signing table.
+        If no keys are found, it returns an empty dict.
+
+        Args:
+            signature (str): The signature you'd like to get.
+
+        Returns:
+            Dict[str, Any]: A dictionary containining the details of a signing key, if found.
+
+        """
+
+        Signing = self.get_model()
+
+        key = Signing.query.filter_by(signature=signature).first()
+
+        if key:
+            return {'signature': key.signature, 'email': key.email, 'scope': key.scope, 'active': key.active, 'timestamp': key.timestamp, 'expiration': key.expiration, 'previous_key': key.previous_key, 'rotated': key.rotated}
+
+        return {}
+
+
+
+
     def rotate_keys(self, time_until:int=1, scope=None) -> bool:
         """
         Rotates all keys that are about to expire.
