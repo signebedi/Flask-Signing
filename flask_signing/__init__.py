@@ -447,7 +447,7 @@ class Signatures:
             time_until (int): rotate keys that are set to expire in this many hours.
             scope (str, list): rotate keys within this scope. If None, all scopes are considered.
         Returns:
-            bool: operation succeeded/failed.
+            List[Tuple[str, str]]: A list of tuples containing old keys and the new keys replacing them
         """
         Signing = self.get_model()
 
@@ -469,12 +469,19 @@ class Signatures:
 
         expiring_keys = query.all()
 
+        key_list = []
+
         for key in expiring_keys:
-            self.rotate_key(key.signature)
+
+            old_key = key.signature
+            new_key = self.rotate_key(key.signature)
+
+            key_list.append((old_key, new_key))
 
         # We may need to potentially modify the return behavior to provide greater detail ... 
         # for example, a list of old keys mapped to their new keys and emails.
-        return True
+        # return True
+        return key_list
 
     def rotate_key(self, key: str, expiration:int=1) -> str:
         """
