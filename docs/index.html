@@ -33,7 +33,7 @@ from functools import wraps
 from sqlalchemy import func, literal
 from sqlalchemy.exc import SQLAlchemyError
 from flask_sqlalchemy import SQLAlchemy
-from typing import Union, List, Dict, Any
+from typing import Union, List, Dict, Any, Optional
 from itsdangerous import URLSafeTimedSerializer
 
 
@@ -48,6 +48,52 @@ class RateLimitExceeded(Exception):
     by sending an HTTP 429 Too Many Requests response to a client.
     &#34;&#34;&#34;
     pass
+
+class KeyDoesNotExist(Exception):
+    &#34;&#34;&#34;
+    An exception that is raised when a requested signing key does not exist in the 
+    system. This could happen if the key has been deleted, never created, or if there 
+    is a mismatch in the key identifier used for lookup.
+
+    This exception indicates that the operation cannot proceed without a valid signing 
+    key, and the calling code should catch this exception to handle these cases 
+    appropriately.
+    &#34;&#34;&#34;
+    pass
+
+class KeyExpired(Exception):
+    &#34;&#34;&#34;
+    An exception that is raised when the signing key&#39;s expiration time has passed
+    or the key is marked inactive. Expired keys are considered invalid for crypto
+    graphic operations.
+
+    This exception helps in enforcing security protocols where only active keys should 
+    be used, allowing the calling code to handle such situations accordingly, such as 
+    notifying the user or selecting an alternate key.
+    &#34;&#34;&#34;
+    pass
+
+class ScopeMismatch(Exception):
+    &#34;&#34;&#34;
+    An exception that is raised when the scope associated with the signing key does not 
+    match any of the required scopes specified in the operation.
+
+    This exception is crucial for maintaining scope-based access control, ensuring that 
+    operations are performed only with keys that have the appropriate scope. The calling 
+    code should handle this exception to enforce correct scope usage.
+    &#34;&#34;&#34;
+    pass
+
+class AlreadyRotated(Exception):
+    &#34;&#34;&#34;
+    An exception that is raised when there is an attempt to rotate an already-rotated
+    key.
+
+    This exception will help prevent keys that have gone stale from being rotated and 
+    producing further children keys.
+    &#34;&#34;&#34;
+    pass
+
 
 class Signatures:
     &#34;&#34;&#34;
@@ -123,23 +169,22 @@ class Signatures:
                 signing_key = Signing.query.filter_by(signature=signature).first()
 
                 # If the key does not exist
-                if not signing_key:
-                    return False
+                if signing_key:
 
-                # Reset request_count if period has passed since last_request_time
-                if datetime.datetime.utcnow() - signing_key.last_request_time &gt;= instance.rate_limiting_period:
-                    signing_key.request_count = 0
+                    # Reset request_count if period has passed since last_request_time
+                    if datetime.datetime.utcnow() - signing_key.last_request_time &gt;= instance.rate_limiting_period:
+                        signing_key.request_count = 0
+                        signing_key.last_request_time = datetime.datetime.utcnow()
+
+                    # Check if request_count exceeds max_requests
+                    if signing_key.request_count &gt;= instance.rate_limiting_max_requests:
+                        raise RateLimitExceeded(&#34;Too many requests. Please try again later.&#34;)
+
+                    # If limit not exceeded, increment request_count and update last_request_time
+                    signing_key.request_count += 1
                     signing_key.last_request_time = datetime.datetime.utcnow()
 
-                # Check if request_count exceeds max_requests
-                if signing_key.request_count &gt;= instance.rate_limiting_max_requests:
-                    raise RateLimitExceeded(&#34;Too many requests. Please try again later.&#34;)
-
-                # If limit not exceeded, increment request_count and update last_request_time
-                signing_key.request_count += 1
-                signing_key.last_request_time = datetime.datetime.utcnow()
-
-                instance.db.session.commit()
+                    instance.db.session.commit()
 
                 return self.func(instance, signature, *args, **kwargs)
             return wrapper
@@ -161,7 +206,7 @@ class Signatures:
             length = self.byte_len
         return secrets.token_urlsafe(length)
 
-    def write_key(self, scope:str=None, expiration:int=1, active:bool=True, email:str=None, previous_key:str=None) -&gt; str:
+    def write_key(self, scope:str=None, expiration:int=0, active:bool=True, email:str=None, previous_key:str=None) -&gt; str:
         &#34;&#34;&#34;
         Writes a newly generated signing key to the database.
 
@@ -170,7 +215,7 @@ class Signatures:
         Args:
             scope (str): The scope within which the signing key will be valid. Defaults to None.
             expiration (int, optional): The number of hours after which the signing key will expire. 
-                If not provided or equals 0, the expiration will be set to zero. Defaults to 1.
+                If not provided or equals 0, the expiration will be set to zero (no-expiry). Defaults to 0.
             active (bool, optional): The status of the signing key. Defaults to True.
             email (str, optional): The email associated with the signing key. Defaults to None.
             previous_key (str, optional): The previous key to associate with this key, in the case of key rotation. Defaults to None.
@@ -195,7 +240,9 @@ class Signatures:
                     &#39;email&#39;:email.lower() if email else &#34;&#34;, 
                     &#39;active&#39;:active,
                     &#39;rotated&#39;: False,
-                    &#39;expiration&#39;:(datetime.datetime.utcnow() + datetime.timedelta(hours=expiration)) if expiration else 0,
+                    # If nothing is passed, set an absurdly-high expiry datetime
+                    &#39;expiration&#39;:(datetime.datetime.utcnow() + datetime.timedelta(hours=expiration)) if expiration else datetime.datetime(9999, 12, 31, 23, 59, 59),
+                    &#39;expiration_int&#39;:expiration,
                     &#39;timestamp&#39;:datetime.datetime.utcnow(),
         }
 
@@ -230,7 +277,7 @@ class Signatures:
 
         signing_key = Signing.query.filter_by(signature=key).first()
         if not signing_key:
-            return False
+            raise KeyDoesNotExist(&#34;This key does not exist.&#34;)
 
         # This will disable the key
         signing_key.active = False
@@ -263,13 +310,14 @@ class Signatures:
             the maximum allowed within the specified time period.
         &#34;&#34;&#34;
 
-        try:
-            valid = self.check_key(signature, scope)
-        except RateLimitExceeded as e:
-            print(e)  # Or handle the exception in some other way
-            return False
+        # try:
+        #     valid = self.check_key(signature, scope)
+        # except RateLimitExceeded as e:
+        #     print(e)  # Or handle the exception in some other way
+        #     return False
+        # return valid
 
-        return valid
+        return self.check_key(signature, scope)
 
     def check_key(self, signature, scope):
         &#34;&#34;&#34;
@@ -294,16 +342,19 @@ class Signatures:
 
         # if the key doesn&#39;t exist
         if not signing_key:
-            return False
+            # return False
+            raise KeyDoesNotExist(&#34;This key does not exist.&#34;)
+
+        # if the signing key is set to inactive
+        if not signing_key.active:
+            # return False
+            raise KeyExpired(&#34;This key is no longer active.&#34;)
 
         # if the signing key&#39;s expiration time has passed
         if signing_key.expiration &lt; datetime.datetime.utcnow():
             self.expire_key(signature)
-            return False
-
-        # if the signing key is set to inactive
-        if not signing_key.active:
-            return False
+            # return False
+            raise KeyExpired(&#34;This key is expired.&#34;)
 
         # Convert scope to a list if it&#39;s a string
         if isinstance(scope, str):
@@ -311,7 +362,7 @@ class Signatures:
 
         # if the signing key&#39;s scope doesn&#39;t match any of the required scopes
         if not set(scope).intersection(set(signing_key.scope)):
-            return False
+            raise ScopeMismatch(&#34;This key does not match the required scope.&#34;)
 
         # # if the signing key&#39;s scope doesn&#39;t match the required scope
         # if signing_key.scope != scope:
@@ -344,6 +395,8 @@ class Signatures:
                 active = self.db.Column(self.db.Boolean)
                 timestamp = self.db.Column(self.db.DateTime, nullable=False, default=datetime.datetime.utcnow)
                 expiration = self.db.Column(self.db.DateTime, nullable=False, default=datetime.datetime.utcnow)
+                # A 0 expiration int means it will never expire
+                expiration_int = self.db.Column(self.db.Integer, nullable=False, default=0)
                 request_count = self.db.Column(self.db.Integer, default=0)
                 last_request_time = self.db.Column(self.db.DateTime, default=datetime.datetime.utcnow)
                 # previous_key = self.db.Column(self.db.String(1000), db.ForeignKey(&#39;signing.signature&#39;))
@@ -391,16 +444,7 @@ class Signatures:
             for s in scope:
                 # https://stackoverflow.com/a/44250678/13301284
                 query = query.filter(Signing.scope.comparator.contains(s))
-
-                # https://stackoverflow.com/a/39470478/13301284
-                # query = query.filter(func.json_contains(Signing.scope, s) == 1)
-                # query = query.filter(literal(s).bool_op(&#39;MEMBER OF&#39;)(Signing.scope.self_group()))
                 
-            # query = query.filter(Signing.scope.in_(scope))
-            
-        # if scope:
-        #     query = query.filter(Signing.scope == scope)
-
         if email:
             query = query.filter(Signing.email == email)
 
@@ -410,7 +454,7 @@ class Signatures:
         result = query.all()
 
         if not result:
-            return False
+            raise Exception(&#34;No results found for given parameters.&#34;)
 
         return [{&#39;signature&#39;: key.signature, &#39;email&#39;: key.email, &#39;scope&#39;: key.scope, &#39;active&#39;: key.active, &#39;timestamp&#39;: key.timestamp, &#39;expiration&#39;: key.expiration, &#39;previous_key&#39;: key.previous_key, &#39;rotated&#39;: key.rotated} for key in result]
 
@@ -427,6 +471,32 @@ class Signatures:
         return [{&#39;signature&#39;: key.signature, &#39;email&#39;: key.email, &#39;scope&#39;: key.scope, &#39;active&#39;: key.active, &#39;timestamp&#39;: key.timestamp, &#39;expiration&#39;: key.expiration, &#39;previous_key&#39;: key.previous_key, &#39;rotated&#39;: key.rotated} for key in self.get_model().query.all()]
 
 
+    def get_key(self, signature:str) -&gt; Dict[str, Any]:
+
+        &#34;&#34;&#34;
+        Query for a single key in the Signing table.
+        If no keys are found, it returns an empty dict.
+
+        Args:
+            signature (str): The signature you&#39;d like to get.
+
+        Returns:
+            Dict[str, Any]: A dictionary containining the details of a signing key, if found.
+
+        &#34;&#34;&#34;
+
+        Signing = self.get_model()
+
+        key = Signing.query.filter_by(signature=signature).first()
+
+        if key:
+            return {&#39;signature&#39;: key.signature, &#39;email&#39;: key.email, &#39;scope&#39;: key.scope, &#39;active&#39;: key.active, &#39;timestamp&#39;: key.timestamp, &#39;expiration&#39;: key.expiration, &#39;previous_key&#39;: key.previous_key, &#39;rotated&#39;: key.rotated}
+
+        return {}
+
+
+
+
     def rotate_keys(self, time_until:int=1, scope=None) -&gt; bool:
         &#34;&#34;&#34;
         Rotates all keys that are about to expire.
@@ -435,53 +505,43 @@ class Signatures:
             time_until (int): rotate keys that are set to expire in this many hours.
             scope (str, list): rotate keys within this scope. If None, all scopes are considered.
         Returns:
-            bool: operation succeeded/failed.
+            List[Tuple[str, str]]: A list of tuples containing old keys and the new keys replacing them
         &#34;&#34;&#34;
-        try:
-            Signing = self.get_model()
+        Signing = self.get_model()
 
-            # get keys that will expire in the next time_until hours
-            query = Signing.query.filter(
-                Signing.expiration &lt;= (datetime.datetime.utcnow() + datetime.timedelta(hours=time_until)),
-                Signing.active == True
-            )
+        # get keys that will expire in the next time_until hours
+        query = Signing.query.filter(
+            Signing.expiration &lt;= (datetime.datetime.utcnow() + datetime.timedelta(hours=time_until)),
+            Signing.active == True
+        )
 
-            # if scope is not None:
-            #     if isinstance(scope, list):
-            #         query = query.filter(Signing.scope.in_(scope))
-            #     else:
-            #         query = query.filter_by(scope=scope)
+        # Convert scope to a list if it&#39;s a string
+        if isinstance(scope, str):
+            scope = [scope]
 
-            # Convert scope to a list if it&#39;s a string
-            if isinstance(scope, str):
-                scope = [scope]
+        if scope:
 
-            if scope:
+            for s in scope:
+                # https://stackoverflow.com/a/44250678/13301284
+                query = query.filter(Signing.scope.comparator.contains(s))
 
-                for s in scope:
-                    # https://stackoverflow.com/a/44250678/13301284
-                    query = query.filter(Signing.scope.comparator.contains(s))
+        expiring_keys = query.all()
 
-            expiring_keys = query.all()
+        key_list = []
 
-            for key in expiring_keys:
-                self.rotate_key(key.signature)
+        for key in expiring_keys:
 
-        except SQLAlchemyError as e:
-            # This will catch any SQLAlchemy related exceptions
-            print(f&#34;An error occurred while rotating keys: {e}&#34;)
-            return False
+            old_key = key.signature
+            new_key = self.rotate_key(key.signature)
 
-        except Exception as e:
-            # This will catch any other kind of unexpected exceptions
-            print(f&#34;An unexpected error occurred: {e}&#34;)
-            return False
+            key_list.append((old_key, new_key))
 
         # We may need to potentially modify the return behavior to provide greater detail ... 
         # for example, a list of old keys mapped to their new keys and emails.
-        return True
+        # return True
+        return key_list
 
-    def rotate_key(self, key: str, expiration:int=1) -&gt; str:
+    def rotate_key(self, key: str, expiration:Optional[int]=None) -&gt; str:
         &#34;&#34;&#34;
         Replaces an active key with a new key with the same properties, and sets the old key as inactive.
         Args:
@@ -490,43 +550,40 @@ class Signatures:
         Returns:
             str: The new signing key.
         &#34;&#34;&#34;
-        try:
-            Signing = self.get_model()
 
-            signing_key = Signing.query.filter_by(signature=key).first()
+        Signing = self.get_model()
 
-            if not signing_key:
-                raise ValueError(&#34;No such key exists&#34;)
+        signing_key = Signing.query.filter_by(signature=key).first()
 
-            if self.safe_mode and signing_key.rotated:
-                raise ValueError(&#34;Key has already been rotated&#34;)
+        if not signing_key:
+            raise KeyDoesNotExist(&#34;This key does not exist.&#34;)
 
-            if self.safe_mode and not signing_key.active:
-                raise ValueError(&#34;You cannot rotate a disabled key&#34;)
+        if self.safe_mode and signing_key.rotated:
+            raise AlreadyRotated(&#34;Key has already been rotated&#34;)
 
-            # Disable old key
-            signing_key.active = False
-            signing_key.rotated = True
-            self.db.session.flush()
+        if self.safe_mode and not signing_key.active:
+            raise KeyExpired(&#34;You cannot rotate a disabled key&#34;)
 
-            # Generate a new key with the same properties
-            new_key = self.write_key(
-                scope=signing_key.scope, 
-                expiration=expiration, 
-                active=True, 
-                email=signing_key.email,
-                previous_key=signing_key.signature,  # Assign old key&#39;s signature to the previous_key field of new key
-            )
-            
-            self.db.session.commit()
+        # Disable old key
+        signing_key.active = False
+        signing_key.rotated = True
+        self.db.session.flush()
 
-        except SQLAlchemyError as e:
-            # print(f&#34;An error occurred while rotating the key {key}: {e}&#34;)
-            return False
 
-        except Exception as e:
-            # print(f&#34;An unexpected error occurred: {e}&#34;)
-            return False
+        # If no expiration int is passed, we inherit the parent&#39;s
+        if expiration is None:
+            expiration = signing_key.expiration_int
+
+        # Generate a new key with the same properties
+        new_key = self.write_key(
+            scope=signing_key.scope,
+            expiration=expiration,
+            active=True, 
+            email=signing_key.email,
+            previous_key=signing_key.signature,  # Assign old key&#39;s signature to the previous_key field of new key
+        )
+        
+        self.db.session.commit()
 
         return new_key
 
@@ -576,64 +633,7 @@ class DangerousSignatures(Signatures):
         if additional_data is not None:
             data.update(additional_data)
 
-        return self.serializer.dumps(data)
-
-    # def check_key(self, signature, scope):
-    #     &#34;&#34;&#34;
-    #     Checks the validity of a given signing key against a specific scope.
-
-    #     This function checks if the signing key exists, if it is active, if it has not expired,
-    #     and if its scope matches the provided scope. If all these conditions are met, the function
-    #     returns True, otherwise, it returns False.
-
-    #     Args:
-    #         signature (str): The signing key to be verified.
-    #         scope (str): The scope against which the signing key will be validated.
-
-    #     Returns:
-    #         bool: True if the signing key is valid and False otherwise.
-    #     &#34;&#34;&#34;
-
-    #     Signing = self.get_model()
-
-    #     # try to decode the signature using the serializer
-    #     try:
-    #         data = self.serializer.loads(signature)
-
-    #         # if the signature doesn&#39;t contain a key, it&#39;s invalid
-    #         if &#34;key&#34; not in data:
-    #             return False
-
-    #         signing_key = Signing.query.filter_by(signature=data[&#34;key&#34;]).first()
-
-    #     except (itsdangerous.BadSignature, itsdangerous.SignatureExpired):
-    #         return False  # if the signature cannot be decoded or is expired, it&#39;s invalid
-    #     except Exception as e:
-    #         print(f&#34;Unexpected error while decoding signature: {e}&#34;)
-    #         return False
-
-    #     # if the key doesn&#39;t exist
-    #     if not signing_key:
-    #         return False
-
-    #     # if the signing key&#39;s expiration time has passed
-    #     if signing_key.expiration &lt; datetime.datetime.utcnow():
-    #         self.expire_key(data[&#34;key&#34;])
-    #         return False
-
-    #     # if the signing key is set to inactive
-    #     if not signing_key.active:
-    #         return False
-
-    #     # Convert scope to a list if it&#39;s a string
-    #     if isinstance(scope, str):
-    #         scope = [scope]
-
-    #     # if the signing key&#39;s scope doesn&#39;t match any of the required scopes
-    #     if not set(scope).intersection(set(signing_key.scope)):
-    #         return False
-
-    #     return True</code></pre>
+        return self.serializer.dumps(data)</code></pre>
 </details>
 </section>
 <section>
@@ -645,6 +645,35 @@ class DangerousSignatures(Signatures):
 <section>
 <h2 class="section-title" id="header-classes">Classes</h2>
 <dl>
+<dt id="flask_signing.AlreadyRotated"><code class="flex name class">
+<span>class <span class="ident">AlreadyRotated</span></span>
+<span>(</span><span>*args, **kwargs)</span>
+</code></dt>
+<dd>
+<div class="desc"><p>An exception that is raised when there is an attempt to rotate an already-rotated
+key.</p>
+<p>This exception will help prevent keys that have gone stale from being rotated and
+producing further children keys.</p></div>
+<details class="source">
+<summary>
+<span>Expand source code</span>
+</summary>
+<pre><code class="python">class AlreadyRotated(Exception):
+    &#34;&#34;&#34;
+    An exception that is raised when there is an attempt to rotate an already-rotated
+    key.
+
+    This exception will help prevent keys that have gone stale from being rotated and 
+    producing further children keys.
+    &#34;&#34;&#34;
+    pass</code></pre>
+</details>
+<h3>Ancestors</h3>
+<ul class="hlist">
+<li>builtins.Exception</li>
+<li>builtins.BaseException</li>
+</ul>
+</dd>
 <dt id="flask_signing.DangerousSignatures"><code class="flex name class">
 <span>class <span class="ident">DangerousSignatures</span></span>
 <span>(</span><span>app, secret_key: str = None, salt: str = None, *args, **kwargs)</span>
@@ -711,64 +740,7 @@ and validation of signing keys in the database using the itsdangerous library.</
         if additional_data is not None:
             data.update(additional_data)
 
-        return self.serializer.dumps(data)
-
-    # def check_key(self, signature, scope):
-    #     &#34;&#34;&#34;
-    #     Checks the validity of a given signing key against a specific scope.
-
-    #     This function checks if the signing key exists, if it is active, if it has not expired,
-    #     and if its scope matches the provided scope. If all these conditions are met, the function
-    #     returns True, otherwise, it returns False.
-
-    #     Args:
-    #         signature (str): The signing key to be verified.
-    #         scope (str): The scope against which the signing key will be validated.
-
-    #     Returns:
-    #         bool: True if the signing key is valid and False otherwise.
-    #     &#34;&#34;&#34;
-
-    #     Signing = self.get_model()
-
-    #     # try to decode the signature using the serializer
-    #     try:
-    #         data = self.serializer.loads(signature)
-
-    #         # if the signature doesn&#39;t contain a key, it&#39;s invalid
-    #         if &#34;key&#34; not in data:
-    #             return False
-
-    #         signing_key = Signing.query.filter_by(signature=data[&#34;key&#34;]).first()
-
-    #     except (itsdangerous.BadSignature, itsdangerous.SignatureExpired):
-    #         return False  # if the signature cannot be decoded or is expired, it&#39;s invalid
-    #     except Exception as e:
-    #         print(f&#34;Unexpected error while decoding signature: {e}&#34;)
-    #         return False
-
-    #     # if the key doesn&#39;t exist
-    #     if not signing_key:
-    #         return False
-
-    #     # if the signing key&#39;s expiration time has passed
-    #     if signing_key.expiration &lt; datetime.datetime.utcnow():
-    #         self.expire_key(data[&#34;key&#34;])
-    #         return False
-
-    #     # if the signing key is set to inactive
-    #     if not signing_key.active:
-    #         return False
-
-    #     # Convert scope to a list if it&#39;s a string
-    #     if isinstance(scope, str):
-    #         scope = [scope]
-
-    #     # if the signing key&#39;s scope doesn&#39;t match any of the required scopes
-    #     if not set(scope).intersection(set(signing_key.scope)):
-    #         return False
-
-    #     return True</code></pre>
+        return self.serializer.dumps(data)</code></pre>
 </details>
 <h3>Ancestors</h3>
 <ul class="hlist">
@@ -828,6 +800,7 @@ and validation of signing keys in the database using the itsdangerous library.</
 <li><code><a title="flask_signing.Signatures.check_key" href="#flask_signing.Signatures.check_key">check_key</a></code></li>
 <li><code><a title="flask_signing.Signatures.expire_key" href="#flask_signing.Signatures.expire_key">expire_key</a></code></li>
 <li><code><a title="flask_signing.Signatures.get_all" href="#flask_signing.Signatures.get_all">get_all</a></code></li>
+<li><code><a title="flask_signing.Signatures.get_key" href="#flask_signing.Signatures.get_key">get_key</a></code></li>
 <li><code><a title="flask_signing.Signatures.get_model" href="#flask_signing.Signatures.get_model">get_model</a></code></li>
 <li><code><a title="flask_signing.Signatures.query_keys" href="#flask_signing.Signatures.query_keys">query_keys</a></code></li>
 <li><code><a title="flask_signing.Signatures.request_limiter" href="#flask_signing.Signatures.request_limiter">request_limiter</a></code></li>
@@ -837,6 +810,72 @@ and validation of signing keys in the database using the itsdangerous library.</
 <li><code><a title="flask_signing.Signatures.write_key" href="#flask_signing.Signatures.write_key">write_key</a></code></li>
 </ul>
 </li>
+</ul>
+</dd>
+<dt id="flask_signing.KeyDoesNotExist"><code class="flex name class">
+<span>class <span class="ident">KeyDoesNotExist</span></span>
+<span>(</span><span>*args, **kwargs)</span>
+</code></dt>
+<dd>
+<div class="desc"><p>An exception that is raised when a requested signing key does not exist in the
+system. This could happen if the key has been deleted, never created, or if there
+is a mismatch in the key identifier used for lookup.</p>
+<p>This exception indicates that the operation cannot proceed without a valid signing
+key, and the calling code should catch this exception to handle these cases
+appropriately.</p></div>
+<details class="source">
+<summary>
+<span>Expand source code</span>
+</summary>
+<pre><code class="python">class KeyDoesNotExist(Exception):
+    &#34;&#34;&#34;
+    An exception that is raised when a requested signing key does not exist in the 
+    system. This could happen if the key has been deleted, never created, or if there 
+    is a mismatch in the key identifier used for lookup.
+
+    This exception indicates that the operation cannot proceed without a valid signing 
+    key, and the calling code should catch this exception to handle these cases 
+    appropriately.
+    &#34;&#34;&#34;
+    pass</code></pre>
+</details>
+<h3>Ancestors</h3>
+<ul class="hlist">
+<li>builtins.Exception</li>
+<li>builtins.BaseException</li>
+</ul>
+</dd>
+<dt id="flask_signing.KeyExpired"><code class="flex name class">
+<span>class <span class="ident">KeyExpired</span></span>
+<span>(</span><span>*args, **kwargs)</span>
+</code></dt>
+<dd>
+<div class="desc"><p>An exception that is raised when the signing key's expiration time has passed
+or the key is marked inactive. Expired keys are considered invalid for crypto
+graphic operations.</p>
+<p>This exception helps in enforcing security protocols where only active keys should
+be used, allowing the calling code to handle such situations accordingly, such as
+notifying the user or selecting an alternate key.</p></div>
+<details class="source">
+<summary>
+<span>Expand source code</span>
+</summary>
+<pre><code class="python">class KeyExpired(Exception):
+    &#34;&#34;&#34;
+    An exception that is raised when the signing key&#39;s expiration time has passed
+    or the key is marked inactive. Expired keys are considered invalid for crypto
+    graphic operations.
+
+    This exception helps in enforcing security protocols where only active keys should 
+    be used, allowing the calling code to handle such situations accordingly, such as 
+    notifying the user or selecting an alternate key.
+    &#34;&#34;&#34;
+    pass</code></pre>
+</details>
+<h3>Ancestors</h3>
+<ul class="hlist">
+<li>builtins.Exception</li>
+<li>builtins.BaseException</li>
 </ul>
 </dd>
 <dt id="flask_signing.RateLimitExceeded"><code class="flex name class">
@@ -863,6 +902,37 @@ by sending an HTTP 429 Too Many Requests response to a client.</p></div>
     This exception is used to signal that the rate limit has been exceeded, so the 
     calling code can catch this exception and handle it appropriately - for example,
     by sending an HTTP 429 Too Many Requests response to a client.
+    &#34;&#34;&#34;
+    pass</code></pre>
+</details>
+<h3>Ancestors</h3>
+<ul class="hlist">
+<li>builtins.Exception</li>
+<li>builtins.BaseException</li>
+</ul>
+</dd>
+<dt id="flask_signing.ScopeMismatch"><code class="flex name class">
+<span>class <span class="ident">ScopeMismatch</span></span>
+<span>(</span><span>*args, **kwargs)</span>
+</code></dt>
+<dd>
+<div class="desc"><p>An exception that is raised when the scope associated with the signing key does not
+match any of the required scopes specified in the operation.</p>
+<p>This exception is crucial for maintaining scope-based access control, ensuring that
+operations are performed only with keys that have the appropriate scope. The calling
+code should handle this exception to enforce correct scope usage.</p></div>
+<details class="source">
+<summary>
+<span>Expand source code</span>
+</summary>
+<pre><code class="python">class ScopeMismatch(Exception):
+    &#34;&#34;&#34;
+    An exception that is raised when the scope associated with the signing key does not 
+    match any of the required scopes specified in the operation.
+
+    This exception is crucial for maintaining scope-based access control, ensuring that 
+    operations are performed only with keys that have the appropriate scope. The calling 
+    code should handle this exception to enforce correct scope usage.
     &#34;&#34;&#34;
     pass</code></pre>
 </details>
@@ -975,23 +1045,22 @@ of signing keys in the database.</p>
                 signing_key = Signing.query.filter_by(signature=signature).first()
 
                 # If the key does not exist
-                if not signing_key:
-                    return False
+                if signing_key:
 
-                # Reset request_count if period has passed since last_request_time
-                if datetime.datetime.utcnow() - signing_key.last_request_time &gt;= instance.rate_limiting_period:
-                    signing_key.request_count = 0
+                    # Reset request_count if period has passed since last_request_time
+                    if datetime.datetime.utcnow() - signing_key.last_request_time &gt;= instance.rate_limiting_period:
+                        signing_key.request_count = 0
+                        signing_key.last_request_time = datetime.datetime.utcnow()
+
+                    # Check if request_count exceeds max_requests
+                    if signing_key.request_count &gt;= instance.rate_limiting_max_requests:
+                        raise RateLimitExceeded(&#34;Too many requests. Please try again later.&#34;)
+
+                    # If limit not exceeded, increment request_count and update last_request_time
+                    signing_key.request_count += 1
                     signing_key.last_request_time = datetime.datetime.utcnow()
 
-                # Check if request_count exceeds max_requests
-                if signing_key.request_count &gt;= instance.rate_limiting_max_requests:
-                    raise RateLimitExceeded(&#34;Too many requests. Please try again later.&#34;)
-
-                # If limit not exceeded, increment request_count and update last_request_time
-                signing_key.request_count += 1
-                signing_key.last_request_time = datetime.datetime.utcnow()
-
-                instance.db.session.commit()
+                    instance.db.session.commit()
 
                 return self.func(instance, signature, *args, **kwargs)
             return wrapper
@@ -1013,7 +1082,7 @@ of signing keys in the database.</p>
             length = self.byte_len
         return secrets.token_urlsafe(length)
 
-    def write_key(self, scope:str=None, expiration:int=1, active:bool=True, email:str=None, previous_key:str=None) -&gt; str:
+    def write_key(self, scope:str=None, expiration:int=0, active:bool=True, email:str=None, previous_key:str=None) -&gt; str:
         &#34;&#34;&#34;
         Writes a newly generated signing key to the database.
 
@@ -1022,7 +1091,7 @@ of signing keys in the database.</p>
         Args:
             scope (str): The scope within which the signing key will be valid. Defaults to None.
             expiration (int, optional): The number of hours after which the signing key will expire. 
-                If not provided or equals 0, the expiration will be set to zero. Defaults to 1.
+                If not provided or equals 0, the expiration will be set to zero (no-expiry). Defaults to 0.
             active (bool, optional): The status of the signing key. Defaults to True.
             email (str, optional): The email associated with the signing key. Defaults to None.
             previous_key (str, optional): The previous key to associate with this key, in the case of key rotation. Defaults to None.
@@ -1047,7 +1116,9 @@ of signing keys in the database.</p>
                     &#39;email&#39;:email.lower() if email else &#34;&#34;, 
                     &#39;active&#39;:active,
                     &#39;rotated&#39;: False,
-                    &#39;expiration&#39;:(datetime.datetime.utcnow() + datetime.timedelta(hours=expiration)) if expiration else 0,
+                    # If nothing is passed, set an absurdly-high expiry datetime
+                    &#39;expiration&#39;:(datetime.datetime.utcnow() + datetime.timedelta(hours=expiration)) if expiration else datetime.datetime(9999, 12, 31, 23, 59, 59),
+                    &#39;expiration_int&#39;:expiration,
                     &#39;timestamp&#39;:datetime.datetime.utcnow(),
         }
 
@@ -1082,7 +1153,7 @@ of signing keys in the database.</p>
 
         signing_key = Signing.query.filter_by(signature=key).first()
         if not signing_key:
-            return False
+            raise KeyDoesNotExist(&#34;This key does not exist.&#34;)
 
         # This will disable the key
         signing_key.active = False
@@ -1115,13 +1186,14 @@ of signing keys in the database.</p>
             the maximum allowed within the specified time period.
         &#34;&#34;&#34;
 
-        try:
-            valid = self.check_key(signature, scope)
-        except RateLimitExceeded as e:
-            print(e)  # Or handle the exception in some other way
-            return False
+        # try:
+        #     valid = self.check_key(signature, scope)
+        # except RateLimitExceeded as e:
+        #     print(e)  # Or handle the exception in some other way
+        #     return False
+        # return valid
 
-        return valid
+        return self.check_key(signature, scope)
 
     def check_key(self, signature, scope):
         &#34;&#34;&#34;
@@ -1146,16 +1218,19 @@ of signing keys in the database.</p>
 
         # if the key doesn&#39;t exist
         if not signing_key:
-            return False
+            # return False
+            raise KeyDoesNotExist(&#34;This key does not exist.&#34;)
+
+        # if the signing key is set to inactive
+        if not signing_key.active:
+            # return False
+            raise KeyExpired(&#34;This key is no longer active.&#34;)
 
         # if the signing key&#39;s expiration time has passed
         if signing_key.expiration &lt; datetime.datetime.utcnow():
             self.expire_key(signature)
-            return False
-
-        # if the signing key is set to inactive
-        if not signing_key.active:
-            return False
+            # return False
+            raise KeyExpired(&#34;This key is expired.&#34;)
 
         # Convert scope to a list if it&#39;s a string
         if isinstance(scope, str):
@@ -1163,7 +1238,7 @@ of signing keys in the database.</p>
 
         # if the signing key&#39;s scope doesn&#39;t match any of the required scopes
         if not set(scope).intersection(set(signing_key.scope)):
-            return False
+            raise ScopeMismatch(&#34;This key does not match the required scope.&#34;)
 
         # # if the signing key&#39;s scope doesn&#39;t match the required scope
         # if signing_key.scope != scope:
@@ -1196,6 +1271,8 @@ of signing keys in the database.</p>
                 active = self.db.Column(self.db.Boolean)
                 timestamp = self.db.Column(self.db.DateTime, nullable=False, default=datetime.datetime.utcnow)
                 expiration = self.db.Column(self.db.DateTime, nullable=False, default=datetime.datetime.utcnow)
+                # A 0 expiration int means it will never expire
+                expiration_int = self.db.Column(self.db.Integer, nullable=False, default=0)
                 request_count = self.db.Column(self.db.Integer, default=0)
                 last_request_time = self.db.Column(self.db.DateTime, default=datetime.datetime.utcnow)
                 # previous_key = self.db.Column(self.db.String(1000), db.ForeignKey(&#39;signing.signature&#39;))
@@ -1243,16 +1320,7 @@ of signing keys in the database.</p>
             for s in scope:
                 # https://stackoverflow.com/a/44250678/13301284
                 query = query.filter(Signing.scope.comparator.contains(s))
-
-                # https://stackoverflow.com/a/39470478/13301284
-                # query = query.filter(func.json_contains(Signing.scope, s) == 1)
-                # query = query.filter(literal(s).bool_op(&#39;MEMBER OF&#39;)(Signing.scope.self_group()))
                 
-            # query = query.filter(Signing.scope.in_(scope))
-            
-        # if scope:
-        #     query = query.filter(Signing.scope == scope)
-
         if email:
             query = query.filter(Signing.email == email)
 
@@ -1262,7 +1330,7 @@ of signing keys in the database.</p>
         result = query.all()
 
         if not result:
-            return False
+            raise Exception(&#34;No results found for given parameters.&#34;)
 
         return [{&#39;signature&#39;: key.signature, &#39;email&#39;: key.email, &#39;scope&#39;: key.scope, &#39;active&#39;: key.active, &#39;timestamp&#39;: key.timestamp, &#39;expiration&#39;: key.expiration, &#39;previous_key&#39;: key.previous_key, &#39;rotated&#39;: key.rotated} for key in result]
 
@@ -1279,6 +1347,32 @@ of signing keys in the database.</p>
         return [{&#39;signature&#39;: key.signature, &#39;email&#39;: key.email, &#39;scope&#39;: key.scope, &#39;active&#39;: key.active, &#39;timestamp&#39;: key.timestamp, &#39;expiration&#39;: key.expiration, &#39;previous_key&#39;: key.previous_key, &#39;rotated&#39;: key.rotated} for key in self.get_model().query.all()]
 
 
+    def get_key(self, signature:str) -&gt; Dict[str, Any]:
+
+        &#34;&#34;&#34;
+        Query for a single key in the Signing table.
+        If no keys are found, it returns an empty dict.
+
+        Args:
+            signature (str): The signature you&#39;d like to get.
+
+        Returns:
+            Dict[str, Any]: A dictionary containining the details of a signing key, if found.
+
+        &#34;&#34;&#34;
+
+        Signing = self.get_model()
+
+        key = Signing.query.filter_by(signature=signature).first()
+
+        if key:
+            return {&#39;signature&#39;: key.signature, &#39;email&#39;: key.email, &#39;scope&#39;: key.scope, &#39;active&#39;: key.active, &#39;timestamp&#39;: key.timestamp, &#39;expiration&#39;: key.expiration, &#39;previous_key&#39;: key.previous_key, &#39;rotated&#39;: key.rotated}
+
+        return {}
+
+
+
+
     def rotate_keys(self, time_until:int=1, scope=None) -&gt; bool:
         &#34;&#34;&#34;
         Rotates all keys that are about to expire.
@@ -1287,53 +1381,43 @@ of signing keys in the database.</p>
             time_until (int): rotate keys that are set to expire in this many hours.
             scope (str, list): rotate keys within this scope. If None, all scopes are considered.
         Returns:
-            bool: operation succeeded/failed.
+            List[Tuple[str, str]]: A list of tuples containing old keys and the new keys replacing them
         &#34;&#34;&#34;
-        try:
-            Signing = self.get_model()
+        Signing = self.get_model()
 
-            # get keys that will expire in the next time_until hours
-            query = Signing.query.filter(
-                Signing.expiration &lt;= (datetime.datetime.utcnow() + datetime.timedelta(hours=time_until)),
-                Signing.active == True
-            )
+        # get keys that will expire in the next time_until hours
+        query = Signing.query.filter(
+            Signing.expiration &lt;= (datetime.datetime.utcnow() + datetime.timedelta(hours=time_until)),
+            Signing.active == True
+        )
 
-            # if scope is not None:
-            #     if isinstance(scope, list):
-            #         query = query.filter(Signing.scope.in_(scope))
-            #     else:
-            #         query = query.filter_by(scope=scope)
+        # Convert scope to a list if it&#39;s a string
+        if isinstance(scope, str):
+            scope = [scope]
 
-            # Convert scope to a list if it&#39;s a string
-            if isinstance(scope, str):
-                scope = [scope]
+        if scope:
 
-            if scope:
+            for s in scope:
+                # https://stackoverflow.com/a/44250678/13301284
+                query = query.filter(Signing.scope.comparator.contains(s))
 
-                for s in scope:
-                    # https://stackoverflow.com/a/44250678/13301284
-                    query = query.filter(Signing.scope.comparator.contains(s))
+        expiring_keys = query.all()
 
-            expiring_keys = query.all()
+        key_list = []
 
-            for key in expiring_keys:
-                self.rotate_key(key.signature)
+        for key in expiring_keys:
 
-        except SQLAlchemyError as e:
-            # This will catch any SQLAlchemy related exceptions
-            print(f&#34;An error occurred while rotating keys: {e}&#34;)
-            return False
+            old_key = key.signature
+            new_key = self.rotate_key(key.signature)
 
-        except Exception as e:
-            # This will catch any other kind of unexpected exceptions
-            print(f&#34;An unexpected error occurred: {e}&#34;)
-            return False
+            key_list.append((old_key, new_key))
 
         # We may need to potentially modify the return behavior to provide greater detail ... 
         # for example, a list of old keys mapped to their new keys and emails.
-        return True
+        # return True
+        return key_list
 
-    def rotate_key(self, key: str, expiration:int=1) -&gt; str:
+    def rotate_key(self, key: str, expiration:Optional[int]=None) -&gt; str:
         &#34;&#34;&#34;
         Replaces an active key with a new key with the same properties, and sets the old key as inactive.
         Args:
@@ -1342,43 +1426,40 @@ of signing keys in the database.</p>
         Returns:
             str: The new signing key.
         &#34;&#34;&#34;
-        try:
-            Signing = self.get_model()
 
-            signing_key = Signing.query.filter_by(signature=key).first()
+        Signing = self.get_model()
 
-            if not signing_key:
-                raise ValueError(&#34;No such key exists&#34;)
+        signing_key = Signing.query.filter_by(signature=key).first()
 
-            if self.safe_mode and signing_key.rotated:
-                raise ValueError(&#34;Key has already been rotated&#34;)
+        if not signing_key:
+            raise KeyDoesNotExist(&#34;This key does not exist.&#34;)
 
-            if self.safe_mode and not signing_key.active:
-                raise ValueError(&#34;You cannot rotate a disabled key&#34;)
+        if self.safe_mode and signing_key.rotated:
+            raise AlreadyRotated(&#34;Key has already been rotated&#34;)
 
-            # Disable old key
-            signing_key.active = False
-            signing_key.rotated = True
-            self.db.session.flush()
+        if self.safe_mode and not signing_key.active:
+            raise KeyExpired(&#34;You cannot rotate a disabled key&#34;)
 
-            # Generate a new key with the same properties
-            new_key = self.write_key(
-                scope=signing_key.scope, 
-                expiration=expiration, 
-                active=True, 
-                email=signing_key.email,
-                previous_key=signing_key.signature,  # Assign old key&#39;s signature to the previous_key field of new key
-            )
-            
-            self.db.session.commit()
+        # Disable old key
+        signing_key.active = False
+        signing_key.rotated = True
+        self.db.session.flush()
 
-        except SQLAlchemyError as e:
-            # print(f&#34;An error occurred while rotating the key {key}: {e}&#34;)
-            return False
 
-        except Exception as e:
-            # print(f&#34;An unexpected error occurred: {e}&#34;)
-            return False
+        # If no expiration int is passed, we inherit the parent&#39;s
+        if expiration is None:
+            expiration = signing_key.expiration_int
+
+        # Generate a new key with the same properties
+        new_key = self.write_key(
+            scope=signing_key.scope,
+            expiration=expiration,
+            active=True, 
+            email=signing_key.email,
+            previous_key=signing_key.signature,  # Assign old key&#39;s signature to the previous_key field of new key
+        )
+        
+        self.db.session.commit()
 
         return new_key</code></pre>
 </details>
@@ -1422,23 +1503,22 @@ count is within limits, it increments the request count and updates the time of 
         signing_key = Signing.query.filter_by(signature=signature).first()
 
         # If the key does not exist
-        if not signing_key:
-            return False
+        if signing_key:
 
-        # Reset request_count if period has passed since last_request_time
-        if datetime.datetime.utcnow() - signing_key.last_request_time &gt;= instance.rate_limiting_period:
-            signing_key.request_count = 0
+            # Reset request_count if period has passed since last_request_time
+            if datetime.datetime.utcnow() - signing_key.last_request_time &gt;= instance.rate_limiting_period:
+                signing_key.request_count = 0
+                signing_key.last_request_time = datetime.datetime.utcnow()
+
+            # Check if request_count exceeds max_requests
+            if signing_key.request_count &gt;= instance.rate_limiting_max_requests:
+                raise RateLimitExceeded(&#34;Too many requests. Please try again later.&#34;)
+
+            # If limit not exceeded, increment request_count and update last_request_time
+            signing_key.request_count += 1
             signing_key.last_request_time = datetime.datetime.utcnow()
 
-        # Check if request_count exceeds max_requests
-        if signing_key.request_count &gt;= instance.rate_limiting_max_requests:
-            raise RateLimitExceeded(&#34;Too many requests. Please try again later.&#34;)
-
-        # If limit not exceeded, increment request_count and update last_request_time
-        signing_key.request_count += 1
-        signing_key.last_request_time = datetime.datetime.utcnow()
-
-        instance.db.session.commit()
+            instance.db.session.commit()
 
         return self.func(instance, signature, *args, **kwargs)
     return wrapper</code></pre>
@@ -1494,16 +1574,19 @@ returns True, otherwise, it returns False.</p>
 
     # if the key doesn&#39;t exist
     if not signing_key:
-        return False
+        # return False
+        raise KeyDoesNotExist(&#34;This key does not exist.&#34;)
+
+    # if the signing key is set to inactive
+    if not signing_key.active:
+        # return False
+        raise KeyExpired(&#34;This key is no longer active.&#34;)
 
     # if the signing key&#39;s expiration time has passed
     if signing_key.expiration &lt; datetime.datetime.utcnow():
         self.expire_key(signature)
-        return False
-
-    # if the signing key is set to inactive
-    if not signing_key.active:
-        return False
+        # return False
+        raise KeyExpired(&#34;This key is expired.&#34;)
 
     # Convert scope to a list if it&#39;s a string
     if isinstance(scope, str):
@@ -1511,7 +1594,7 @@ returns True, otherwise, it returns False.</p>
 
     # if the signing key&#39;s scope doesn&#39;t match any of the required scopes
     if not set(scope).intersection(set(signing_key.scope)):
-        return False
+        raise ScopeMismatch(&#34;This key does not match the required scope.&#34;)
 
     # # if the signing key&#39;s scope doesn&#39;t match the required scope
     # if signing_key.scope != scope:
@@ -1560,7 +1643,7 @@ If the key does not exist, the function returns False and an HTTP status code 50
 
     signing_key = Signing.query.filter_by(signature=key).first()
     if not signing_key:
-        return False
+        raise KeyDoesNotExist(&#34;This key does not exist.&#34;)
 
     # This will disable the key
     signing_key.active = False
@@ -1635,6 +1718,50 @@ If no keys are found, it returns an empty list.</p>
     return [{&#39;signature&#39;: key.signature, &#39;email&#39;: key.email, &#39;scope&#39;: key.scope, &#39;active&#39;: key.active, &#39;timestamp&#39;: key.timestamp, &#39;expiration&#39;: key.expiration, &#39;previous_key&#39;: key.previous_key, &#39;rotated&#39;: key.rotated} for key in self.get_model().query.all()]</code></pre>
 </details>
 </dd>
+<dt id="flask_signing.Signatures.get_key"><code class="name flex">
+<span>def <span class="ident">get_key</span></span>(<span>self, signature: str) ‑> Dict[str, Any]</span>
+</code></dt>
+<dd>
+<div class="desc"><p>Query for a single key in the Signing table.
+If no keys are found, it returns an empty dict.</p>
+<h2 id="args">Args</h2>
+<dl>
+<dt><strong><code>signature</code></strong> :&ensp;<code>str</code></dt>
+<dd>The signature you'd like to get.</dd>
+</dl>
+<h2 id="returns">Returns</h2>
+<dl>
+<dt><code>Dict[str, Any]</code></dt>
+<dd>A dictionary containining the details of a signing key, if found.</dd>
+</dl></div>
+<details class="source">
+<summary>
+<span>Expand source code</span>
+</summary>
+<pre><code class="python">def get_key(self, signature:str) -&gt; Dict[str, Any]:
+
+    &#34;&#34;&#34;
+    Query for a single key in the Signing table.
+    If no keys are found, it returns an empty dict.
+
+    Args:
+        signature (str): The signature you&#39;d like to get.
+
+    Returns:
+        Dict[str, Any]: A dictionary containining the details of a signing key, if found.
+
+    &#34;&#34;&#34;
+
+    Signing = self.get_model()
+
+    key = Signing.query.filter_by(signature=signature).first()
+
+    if key:
+        return {&#39;signature&#39;: key.signature, &#39;email&#39;: key.email, &#39;scope&#39;: key.scope, &#39;active&#39;: key.active, &#39;timestamp&#39;: key.timestamp, &#39;expiration&#39;: key.expiration, &#39;previous_key&#39;: key.previous_key, &#39;rotated&#39;: key.rotated}
+
+    return {}</code></pre>
+</details>
+</dd>
 <dt id="flask_signing.Signatures.get_model"><code class="name flex">
 <span>def <span class="ident">get_model</span></span>(<span>self)</span>
 </code></dt>
@@ -1684,6 +1811,8 @@ If no keys are found, it returns an empty list.</p>
             active = self.db.Column(self.db.Boolean)
             timestamp = self.db.Column(self.db.DateTime, nullable=False, default=datetime.datetime.utcnow)
             expiration = self.db.Column(self.db.DateTime, nullable=False, default=datetime.datetime.utcnow)
+            # A 0 expiration int means it will never expire
+            expiration_int = self.db.Column(self.db.Integer, nullable=False, default=0)
             request_count = self.db.Column(self.db.Integer, default=0)
             last_request_time = self.db.Column(self.db.DateTime, default=datetime.datetime.utcnow)
             # previous_key = self.db.Column(self.db.String(1000), db.ForeignKey(&#39;signing.signature&#39;))
@@ -1759,16 +1888,7 @@ If no keys are found, it returns False.</p>
         for s in scope:
             # https://stackoverflow.com/a/44250678/13301284
             query = query.filter(Signing.scope.comparator.contains(s))
-
-            # https://stackoverflow.com/a/39470478/13301284
-            # query = query.filter(func.json_contains(Signing.scope, s) == 1)
-            # query = query.filter(literal(s).bool_op(&#39;MEMBER OF&#39;)(Signing.scope.self_group()))
             
-        # query = query.filter(Signing.scope.in_(scope))
-        
-    # if scope:
-    #     query = query.filter(Signing.scope == scope)
-
     if email:
         query = query.filter(Signing.email == email)
 
@@ -1778,13 +1898,13 @@ If no keys are found, it returns False.</p>
     result = query.all()
 
     if not result:
-        return False
+        raise Exception(&#34;No results found for given parameters.&#34;)
 
     return [{&#39;signature&#39;: key.signature, &#39;email&#39;: key.email, &#39;scope&#39;: key.scope, &#39;active&#39;: key.active, &#39;timestamp&#39;: key.timestamp, &#39;expiration&#39;: key.expiration, &#39;previous_key&#39;: key.previous_key, &#39;rotated&#39;: key.rotated} for key in result]</code></pre>
 </details>
 </dd>
 <dt id="flask_signing.Signatures.rotate_key"><code class="name flex">
-<span>def <span class="ident">rotate_key</span></span>(<span>self, key: str, expiration: int = 1) ‑> str</span>
+<span>def <span class="ident">rotate_key</span></span>(<span>self, key: str, expiration: Optional[int] = None) ‑> str</span>
 </code></dt>
 <dd>
 <div class="desc"><p>Replaces an active key with a new key with the same properties, and sets the old key as inactive.</p>
@@ -1804,7 +1924,7 @@ If no keys are found, it returns False.</p>
 <summary>
 <span>Expand source code</span>
 </summary>
-<pre><code class="python">def rotate_key(self, key: str, expiration:int=1) -&gt; str:
+<pre><code class="python">def rotate_key(self, key: str, expiration:Optional[int]=None) -&gt; str:
     &#34;&#34;&#34;
     Replaces an active key with a new key with the same properties, and sets the old key as inactive.
     Args:
@@ -1813,43 +1933,40 @@ If no keys are found, it returns False.</p>
     Returns:
         str: The new signing key.
     &#34;&#34;&#34;
-    try:
-        Signing = self.get_model()
 
-        signing_key = Signing.query.filter_by(signature=key).first()
+    Signing = self.get_model()
 
-        if not signing_key:
-            raise ValueError(&#34;No such key exists&#34;)
+    signing_key = Signing.query.filter_by(signature=key).first()
 
-        if self.safe_mode and signing_key.rotated:
-            raise ValueError(&#34;Key has already been rotated&#34;)
+    if not signing_key:
+        raise KeyDoesNotExist(&#34;This key does not exist.&#34;)
 
-        if self.safe_mode and not signing_key.active:
-            raise ValueError(&#34;You cannot rotate a disabled key&#34;)
+    if self.safe_mode and signing_key.rotated:
+        raise AlreadyRotated(&#34;Key has already been rotated&#34;)
 
-        # Disable old key
-        signing_key.active = False
-        signing_key.rotated = True
-        self.db.session.flush()
+    if self.safe_mode and not signing_key.active:
+        raise KeyExpired(&#34;You cannot rotate a disabled key&#34;)
 
-        # Generate a new key with the same properties
-        new_key = self.write_key(
-            scope=signing_key.scope, 
-            expiration=expiration, 
-            active=True, 
-            email=signing_key.email,
-            previous_key=signing_key.signature,  # Assign old key&#39;s signature to the previous_key field of new key
-        )
-        
-        self.db.session.commit()
+    # Disable old key
+    signing_key.active = False
+    signing_key.rotated = True
+    self.db.session.flush()
 
-    except SQLAlchemyError as e:
-        # print(f&#34;An error occurred while rotating the key {key}: {e}&#34;)
-        return False
 
-    except Exception as e:
-        # print(f&#34;An unexpected error occurred: {e}&#34;)
-        return False
+    # If no expiration int is passed, we inherit the parent&#39;s
+    if expiration is None:
+        expiration = signing_key.expiration_int
+
+    # Generate a new key with the same properties
+    new_key = self.write_key(
+        scope=signing_key.scope,
+        expiration=expiration,
+        active=True, 
+        email=signing_key.email,
+        previous_key=signing_key.signature,  # Assign old key&#39;s signature to the previous_key field of new key
+    )
+    
+    self.db.session.commit()
 
     return new_key</code></pre>
 </details>
@@ -1869,8 +1986,8 @@ This is written with the background processes in mind. This can be wrapped in a 
 </dl>
 <h2 id="returns">Returns</h2>
 <dl>
-<dt><code>bool</code></dt>
-<dd>operation succeeded/failed.</dd>
+<dt><code>List[Tuple[str, str]]</code></dt>
+<dd>A list of tuples containing old keys and the new keys replacing them</dd>
 </dl></div>
 <details class="source">
 <summary>
@@ -1884,51 +2001,41 @@ This is written with the background processes in mind. This can be wrapped in a 
         time_until (int): rotate keys that are set to expire in this many hours.
         scope (str, list): rotate keys within this scope. If None, all scopes are considered.
     Returns:
-        bool: operation succeeded/failed.
+        List[Tuple[str, str]]: A list of tuples containing old keys and the new keys replacing them
     &#34;&#34;&#34;
-    try:
-        Signing = self.get_model()
+    Signing = self.get_model()
 
-        # get keys that will expire in the next time_until hours
-        query = Signing.query.filter(
-            Signing.expiration &lt;= (datetime.datetime.utcnow() + datetime.timedelta(hours=time_until)),
-            Signing.active == True
-        )
+    # get keys that will expire in the next time_until hours
+    query = Signing.query.filter(
+        Signing.expiration &lt;= (datetime.datetime.utcnow() + datetime.timedelta(hours=time_until)),
+        Signing.active == True
+    )
 
-        # if scope is not None:
-        #     if isinstance(scope, list):
-        #         query = query.filter(Signing.scope.in_(scope))
-        #     else:
-        #         query = query.filter_by(scope=scope)
+    # Convert scope to a list if it&#39;s a string
+    if isinstance(scope, str):
+        scope = [scope]
 
-        # Convert scope to a list if it&#39;s a string
-        if isinstance(scope, str):
-            scope = [scope]
+    if scope:
 
-        if scope:
+        for s in scope:
+            # https://stackoverflow.com/a/44250678/13301284
+            query = query.filter(Signing.scope.comparator.contains(s))
 
-            for s in scope:
-                # https://stackoverflow.com/a/44250678/13301284
-                query = query.filter(Signing.scope.comparator.contains(s))
+    expiring_keys = query.all()
 
-        expiring_keys = query.all()
+    key_list = []
 
-        for key in expiring_keys:
-            self.rotate_key(key.signature)
+    for key in expiring_keys:
 
-    except SQLAlchemyError as e:
-        # This will catch any SQLAlchemy related exceptions
-        print(f&#34;An error occurred while rotating keys: {e}&#34;)
-        return False
+        old_key = key.signature
+        new_key = self.rotate_key(key.signature)
 
-    except Exception as e:
-        # This will catch any other kind of unexpected exceptions
-        print(f&#34;An unexpected error occurred: {e}&#34;)
-        return False
+        key_list.append((old_key, new_key))
 
     # We may need to potentially modify the return behavior to provide greater detail ... 
     # for example, a list of old keys mapped to their new keys and emails.
-    return True</code></pre>
+    # return True
+    return key_list</code></pre>
 </details>
 </dd>
 <dt id="flask_signing.Signatures.verify_key"><code class="name flex">
@@ -1989,17 +2096,18 @@ def verify_key(self, signature, scope):
         the maximum allowed within the specified time period.
     &#34;&#34;&#34;
 
-    try:
-        valid = self.check_key(signature, scope)
-    except RateLimitExceeded as e:
-        print(e)  # Or handle the exception in some other way
-        return False
+    # try:
+    #     valid = self.check_key(signature, scope)
+    # except RateLimitExceeded as e:
+    #     print(e)  # Or handle the exception in some other way
+    #     return False
+    # return valid
 
-    return valid</code></pre>
+    return self.check_key(signature, scope)</code></pre>
 </details>
 </dd>
 <dt id="flask_signing.Signatures.write_key"><code class="name flex">
-<span>def <span class="ident">write_key</span></span>(<span>self, scope: str = None, expiration: int = 1, active: bool = True, email: str = None, previous_key: str = None) ‑> str</span>
+<span>def <span class="ident">write_key</span></span>(<span>self, scope: str = None, expiration: int = 0, active: bool = True, email: str = None, previous_key: str = None) ‑> str</span>
 </code></dt>
 <dd>
 <div class="desc"><p>Writes a newly generated signing key to the database.</p>
@@ -2010,7 +2118,7 @@ def verify_key(self, signature, scope):
 <dd>The scope within which the signing key will be valid. Defaults to None.</dd>
 <dt><strong><code>expiration</code></strong> :&ensp;<code>int</code>, optional</dt>
 <dd>The number of hours after which the signing key will expire.
-If not provided or equals 0, the expiration will be set to zero. Defaults to 1.</dd>
+If not provided or equals 0, the expiration will be set to zero (no-expiry). Defaults to 0.</dd>
 <dt><strong><code>active</code></strong> :&ensp;<code>bool</code>, optional</dt>
 <dd>The status of the signing key. Defaults to True.</dd>
 <dt><strong><code>email</code></strong> :&ensp;<code>str</code>, optional</dt>
@@ -2027,7 +2135,7 @@ If not provided or equals 0, the expiration will be set to zero. Defaults to 1.<
 <summary>
 <span>Expand source code</span>
 </summary>
-<pre><code class="python">def write_key(self, scope:str=None, expiration:int=1, active:bool=True, email:str=None, previous_key:str=None) -&gt; str:
+<pre><code class="python">def write_key(self, scope:str=None, expiration:int=0, active:bool=True, email:str=None, previous_key:str=None) -&gt; str:
     &#34;&#34;&#34;
     Writes a newly generated signing key to the database.
 
@@ -2036,7 +2144,7 @@ If not provided or equals 0, the expiration will be set to zero. Defaults to 1.<
     Args:
         scope (str): The scope within which the signing key will be valid. Defaults to None.
         expiration (int, optional): The number of hours after which the signing key will expire. 
-            If not provided or equals 0, the expiration will be set to zero. Defaults to 1.
+            If not provided or equals 0, the expiration will be set to zero (no-expiry). Defaults to 0.
         active (bool, optional): The status of the signing key. Defaults to True.
         email (str, optional): The email associated with the signing key. Defaults to None.
         previous_key (str, optional): The previous key to associate with this key, in the case of key rotation. Defaults to None.
@@ -2061,7 +2169,9 @@ If not provided or equals 0, the expiration will be set to zero. Defaults to 1.<
                 &#39;email&#39;:email.lower() if email else &#34;&#34;, 
                 &#39;active&#39;:active,
                 &#39;rotated&#39;: False,
-                &#39;expiration&#39;:(datetime.datetime.utcnow() + datetime.timedelta(hours=expiration)) if expiration else 0,
+                # If nothing is passed, set an absurdly-high expiry datetime
+                &#39;expiration&#39;:(datetime.datetime.utcnow() + datetime.timedelta(hours=expiration)) if expiration else datetime.datetime(9999, 12, 31, 23, 59, 59),
+                &#39;expiration_int&#39;:expiration,
                 &#39;timestamp&#39;:datetime.datetime.utcnow(),
     }
 
@@ -2092,13 +2202,25 @@ If not provided or equals 0, the expiration will be set to zero. Defaults to 1.<
 <li><h3><a href="#header-classes">Classes</a></h3>
 <ul>
 <li>
+<h4><code><a title="flask_signing.AlreadyRotated" href="#flask_signing.AlreadyRotated">AlreadyRotated</a></code></h4>
+</li>
+<li>
 <h4><code><a title="flask_signing.DangerousSignatures" href="#flask_signing.DangerousSignatures">DangerousSignatures</a></code></h4>
 <ul class="">
 <li><code><a title="flask_signing.DangerousSignatures.generate_key" href="#flask_signing.DangerousSignatures.generate_key">generate_key</a></code></li>
 </ul>
 </li>
 <li>
+<h4><code><a title="flask_signing.KeyDoesNotExist" href="#flask_signing.KeyDoesNotExist">KeyDoesNotExist</a></code></h4>
+</li>
+<li>
+<h4><code><a title="flask_signing.KeyExpired" href="#flask_signing.KeyExpired">KeyExpired</a></code></h4>
+</li>
+<li>
 <h4><code><a title="flask_signing.RateLimitExceeded" href="#flask_signing.RateLimitExceeded">RateLimitExceeded</a></code></h4>
+</li>
+<li>
+<h4><code><a title="flask_signing.ScopeMismatch" href="#flask_signing.ScopeMismatch">ScopeMismatch</a></code></h4>
 </li>
 <li>
 <h4><code><a title="flask_signing.Signatures" href="#flask_signing.Signatures">Signatures</a></code></h4>
@@ -2107,6 +2229,7 @@ If not provided or equals 0, the expiration will be set to zero. Defaults to 1.<
 <li><code><a title="flask_signing.Signatures.expire_key" href="#flask_signing.Signatures.expire_key">expire_key</a></code></li>
 <li><code><a title="flask_signing.Signatures.generate_key" href="#flask_signing.Signatures.generate_key">generate_key</a></code></li>
 <li><code><a title="flask_signing.Signatures.get_all" href="#flask_signing.Signatures.get_all">get_all</a></code></li>
+<li><code><a title="flask_signing.Signatures.get_key" href="#flask_signing.Signatures.get_key">get_key</a></code></li>
 <li><code><a title="flask_signing.Signatures.get_model" href="#flask_signing.Signatures.get_model">get_model</a></code></li>
 <li><code><a title="flask_signing.Signatures.query_keys" href="#flask_signing.Signatures.query_keys">query_keys</a></code></li>
 <li><code><a title="flask_signing.Signatures.request_limiter" href="#flask_signing.Signatures.request_limiter">request_limiter</a></code></li>
